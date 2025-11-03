@@ -80,6 +80,9 @@ jobs:
         node -e "
         const pkg = require('./package.json');
         pkg.name = '@${{ github.repository_owner }}/' + pkg.name.replace('@', '').replace('/', '-');
+        pkg.publishConfig = {
+          registry: 'https://npm.pkg.github.com/'
+        };
         require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
         "
 
