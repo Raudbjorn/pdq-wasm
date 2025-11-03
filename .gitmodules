@@ -1,0 +1,3 @@
+[submodule "external/ThreatExchange"]
+	path = external/ThreatExchange
+	url = https://github.com/facebook/ThreatExchange.git

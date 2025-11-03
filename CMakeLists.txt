@@ -5,15 +5,30 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set the path to the original PDQ C++ implementation
-set(PDQ_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../pdq/cpp")
+# Check if PDQ is available as a submodule first, otherwise use sibling directory
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/ThreatExchange/pdq/cpp")
+    set(PDQ_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/ThreatExchange/pdq/cpp")
+else()
+    set(PDQ_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../pdq/cpp")
+endif()
 
 # Include directories
 # Need parent directory so #include <pdq/cpp/...> works
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${PDQ_CPP_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpp
-)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/ThreatExchange/pdq/cpp")
+    # Using submodule
+    include_directories(
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/ThreatExchange
+        ${PDQ_CPP_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/cpp
+    )
+else()
+    # Using sibling directory
+    include_directories(
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${PDQ_CPP_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/cpp
+    )
+endif()
 
 # Collect all PDQ source files
 file(GLOB PDQ_SOURCES
