@@ -505,6 +505,20 @@ describe('PDQ', () => {
       expect(ordered[1].index).toBeUndefined();
     });
 
+    it('should include index by default when includeIndex is not specified', () => {
+      const referenceHash = new Uint8Array(32).fill(0);
+      const hash1 = new Uint8Array(32).fill(0);
+      const hash2 = new Uint8Array(32).fill(1);
+
+      const hashes = [hash1, hash2];
+
+      // Call without the third argument
+      const ordered = PDQ.orderBySimilarity(referenceHash, hashes);
+
+      expect(ordered[0]).toHaveProperty('index');
+      expect(ordered[1]).toHaveProperty('index');
+    });
+
     it('should handle empty array', () => {
       const referenceHash = new Uint8Array(32).fill(0);
       const hashes: Uint8Array[] = [];
