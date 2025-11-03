@@ -238,12 +238,12 @@ topResults.forEach((result, i) => {
 // Old approach: manual sorting (O(n log n) + O(n) comparisons)
 const results = dbHashes.map(hash => ({
   hash,
-  distance: PDQ.hammingDistance(queryHash, hash),
-  similarity: PDQ.similarity(queryHash, hash)
+  distance: PDQ.hammingDistance(queryHash.hash, hash),
+  similarity: PDQ.similarity(queryHash.hash, hash)
 })).sort((a, b) => a.distance - b.distance);
 
 // New approach: using orderBySimilarity (optimized)
-const ordered = PDQ.orderBySimilarity(queryHash, dbHashes);
+const ordered = PDQ.orderBySimilarity(queryHash.hash, dbHashes);
 // Returns pre-sorted results with distance and similarity already calculated
 ```
 
