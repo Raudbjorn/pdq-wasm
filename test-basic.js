@@ -5,7 +5,7 @@
  * Tests that the module loads and basic functions work
  */
 
-const createPDQModule = require('./dist/pdq.js');
+const createPDQModule = require('./wasm/pdq.js');
 
 async function runTest() {
   console.log('Loading PDQ WASM module...');
