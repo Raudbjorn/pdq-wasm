@@ -1,0 +1,24 @@
+# Source files
+src/
+cpp/
+__tests__/
+scripts/
+
+# Build files
+CMakeLists.txt
+tsconfig.json
+jest.config.js
+build/
+
+# Development
+.git/
+.gitignore
+*.md
+!README.md
+
+# CI/CD
+.github/
+.vscode/
+
+# Tests
+coverage/
