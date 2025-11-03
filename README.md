@@ -150,6 +150,16 @@ See the [examples/](./examples/) directory for:
 
 Full documentation: [examples/README.md](./examples/README.md)
 
+### PostgreSQL Integration
+
+For storing and querying PDQ hashes in PostgreSQL databases:
+- Schema design for hash storage
+- Efficient similarity queries using SQL
+- Using `<` and `>` operators on distances
+- Batch operations and performance optimization
+
+Full guide: [docs/POSTGRESQL.md](./docs/POSTGRESQL.md)
+
 ## API Reference
 
 ### Initialization
@@ -238,6 +248,45 @@ const similarity = PDQ.similarity(hash1, hash2);
 console.log(`${similarity.toFixed(2)}% similar`);
 ```
 
+#### `PDQ.orderBySimilarity(referenceHash, hashes, includeIndex?): SimilarityMatch[]`
+
+Order an array of hashes by similarity to a reference hash. Returns hashes sorted from most similar to least similar.
+
+**Parameters:**
+- `referenceHash`: `Uint8Array` - The reference hash to compare against
+- `hashes`: `Uint8Array[]` - Array of hashes to order
+- `includeIndex`: `boolean` - Whether to include original array index (default: false)
+
+**Returns:** `SimilarityMatch[]` - Array of objects containing:
+- `hash`: `Uint8Array` - The hash
+- `distance`: `number` - Hamming distance from reference (0-256)
+- `similarity`: `number` - Similarity percentage (0-100)
+- `index?`: `number` - Original array index (if includeIndex is true)
+
+**Example:**
+```javascript
+const referenceHash = PDQ.hash(referenceImage).hash;
+const candidateHashes = [hash1, hash2, hash3, hash4];
+
+// Order by similarity
+const ordered = PDQ.orderBySimilarity(referenceHash, candidateHashes);
+
+// Most similar first
+console.log('Most similar:', PDQ.toHex(ordered[0].hash));
+console.log('Distance:', ordered[0].distance);
+console.log('Similarity:', ordered[0].similarity.toFixed(2) + '%');
+
+// With original indices
+const withIndices = PDQ.orderBySimilarity(referenceHash, candidateHashes, true);
+console.log('Original index:', withIndices[0].index);
+```
+
+**Use Cases:**
+- Find top-N most similar images
+- Rank search results by similarity
+- Deduplicate image collections
+- Build image recommendation systems
+
 ### Format Conversion
 
 #### `PDQ.toHex(hash): string`
@@ -268,6 +317,85 @@ Convert a hexadecimal string to PDQ hash.
 ```javascript
 const hash = PDQ.fromHex("a1b2c3d4e5f6...");
 ```
+
+## Hash Serialization
+
+PDQ hashes can be serialized in multiple formats for different use cases:
+
+### Hexadecimal (Recommended for Databases)
+
+```javascript
+const hexHash = PDQ.toHex(result.hash);
+// "a1b2c3d4e5f6..." (64 characters)
+
+// Store in PostgreSQL
+await client.query(
+  'INSERT INTO images (pdq_hash) VALUES ($1)',
+  [hexHash]
+);
+
+// Retrieve and deserialize
+const row = await client.query('SELECT pdq_hash FROM images WHERE id = $1', [id]);
+const hash = PDQ.fromHex(row.rows[0].pdq_hash);
+```
+
+**Best for:** SQL databases (VARCHAR(64) or TEXT), JSON, REST APIs
+
+### Binary (Most Efficient)
+
+```javascript
+const binaryHash = Buffer.from(result.hash);
+// 32 bytes
+
+// Store in PostgreSQL as BYTEA
+await client.query(
+  'INSERT INTO images (pdq_hash_binary) VALUES ($1)',
+  [binaryHash]
+);
+
+// Retrieve
+const row = await client.query('SELECT pdq_hash_binary FROM images WHERE id = $1', [id]);
+const hash = new Uint8Array(row.rows[0].pdq_hash_binary);
+```
+
+**Best for:** Binary databases, file storage, network transmission
+
+### Base64 (Web-Friendly)
+
+```javascript
+const base64Hash = Buffer.from(result.hash).toString('base64');
+// 44 characters
+
+// Use in URLs or JSON
+const response = {
+  imageId: 123,
+  pdqHash: base64Hash
+};
+
+// Deserialize
+const hash = new Uint8Array(Buffer.from(base64Hash, 'base64'));
+```
+
+**Best for:** URLs, JSON APIs, localStorage
+
+### Important: Comparing Distances, Not Hashes
+
+**You cannot use `<` and `>` on hash values** to determine similarity. Hashes must be compared using Hamming distance:
+
+```javascript
+// ❌ INCORRECT - comparing hash values directly
+if (hash1 < hash2) { /* This doesn't determine similarity! */ }
+
+// ✅ CORRECT - comparing distances
+const distance1 = PDQ.hammingDistance(referenceHash, hash1);
+const distance2 = PDQ.hammingDistance(referenceHash, hash2);
+
+if (distance1 < distance2) {
+  console.log('hash1 is more similar to reference than hash2');
+}
+```
+
+For PostgreSQL queries using `<` and `>`, see the [PostgreSQL Integration Guide](./docs/POSTGRESQL.md).
 
 ## Image Data Format
 
@@ -373,8 +501,8 @@ node test-basic.js
 ```
 
 Test coverage:
-- ✅ **43 tests total** (100% pass rate)
-- ✅ 30 unit tests covering all API functions
+- ✅ **52 tests total** (100% pass rate)
+- ✅ 39 unit tests covering all API functions
 - ✅ 13 pairwise image similarity tests
 - ✅ Initialization and error handling
 - ✅ Hash generation (grayscale and RGB)

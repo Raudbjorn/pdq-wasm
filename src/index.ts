@@ -11,6 +11,7 @@ export type {
   PDQHashResult,
   ImageData,
   PDQOptions,
+  SimilarityMatch,
 } from './types';
 
 // Re-export as default

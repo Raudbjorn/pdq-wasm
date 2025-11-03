@@ -61,3 +61,17 @@ export interface PDQOptions {
   /** Custom WASM module URL (for browser environments) */
   wasmUrl?: string;
 }
+
+/**
+ * Similarity match result for ordering operations
+ */
+export interface SimilarityMatch {
+  /** The hash being compared */
+  hash: PDQHash;
+  /** Hamming distance from reference hash (0-256) */
+  distance: number;
+  /** Similarity percentage (0-100%) */
+  similarity: number;
+  /** Optional index of the hash in the original array */
+  index?: number;
+}
