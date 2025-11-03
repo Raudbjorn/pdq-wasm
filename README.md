@@ -99,7 +99,7 @@ For browser environments, you can load the WASM module from a CDN:
 
 ```html
 <script type="module">
-  import { PDQ } from 'https://unpkg.com/pdq-wasm@0.2.0/dist/index.js';
+  import { PDQ } from 'https://unpkg.com/pdq-wasm@0.2.0/dist/index.mjs';
 
   async function main() {
     // Initialize with WASM URL from CDN
@@ -109,6 +109,9 @@ For browser environments, you can load the WASM module from a CDN:
 
     // Now use PDQ as normal
     const canvas = document.getElementById('myCanvas');
+    if (!canvas) {
+      throw new Error('Canvas element with id="myCanvas" not found');
+    }
     const ctx = canvas.getContext('2d');
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
@@ -145,6 +148,11 @@ For production use with a custom domain, you can:
 1. Set up GitHub Pages to serve the WASM files
 2. Configure a CNAME for your domain
 3. Load from your custom domain: `https://cdn.yourdomain.com/pdq.wasm`
+
+**Security Note:** As a best practice, only load WASM modules from trusted sources. The `wasmUrl` option dynamically loads and executes WebAssembly code in your application. Always verify that the URL points to a trusted CDN or your own infrastructure. For production applications, consider:
+- Using Subresource Integrity (SRI) hashes when supported
+- Hosting WASM files on your own domain with proper CORS headers
+- Implementing Content Security Policy (CSP) to restrict allowed sources
 
 ## Examples
 
