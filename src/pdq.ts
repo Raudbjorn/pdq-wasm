@@ -63,26 +63,53 @@ export class PDQ {
     this.initPromise = (async () => {
       // Browser environment with custom WASM URL
       if (options.wasmUrl && typeof window !== 'undefined') {
-        // Dynamically load the WASM module factory script
-        const wasmJsUrl = options.wasmUrl.replace(/\.wasm$/, '.js');
+        try {
+          // Dynamically load the WASM module factory script
+          const wasmJsUrl = options.wasmUrl.replace(/\.wasm$/, '.js');
 
-        // Load the Emscripten-generated JS file
-        const response = await fetch(wasmJsUrl);
-        const moduleCode = await response.text();
-
-        // Execute the module code to get the factory function
-        const moduleFunc = new Function('Module', moduleCode + '; return createPDQModule;');
-        const factory = moduleFunc();
-
-        // Initialize with the WASM URL
-        this.module = await factory({
-          locateFile: (path: string) => {
-            if (path.endsWith('.wasm')) {
-              return options.wasmUrl!;
-            }
-            return path;
+          // Load the Emscripten-generated JS file with error handling
+          const response = await fetch(wasmJsUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch WASM JS from ${wasmJsUrl}: ${response.status} ${response.statusText}`);
           }
-        });
+
+          // Use script tag injection instead of eval-like Function constructor for better security
+          const script = document.createElement('script');
+          script.textContent = await response.text();
+
+          // Load script and wait for createPDQModule to be available
+          await new Promise<void>((resolve, reject) => {
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load WASM module script'));
+            document.head.appendChild(script);
+            // Script executes synchronously, so factory should be available immediately
+            if (typeof (window as any).createPDQModule === 'function') {
+              resolve();
+            }
+          });
+
+          const factory = (window as any).createPDQModule;
+          if (typeof factory !== 'function') {
+            throw new Error('createPDQModule function not found in loaded WASM script');
+          }
+
+          // Initialize with the WASM URL
+          this.module = await factory({
+            locateFile: (path: string) => {
+              if (path.endsWith('.wasm')) {
+                return options.wasmUrl!;
+              }
+              return path;
+            }
+          });
+
+          // Clean up script tag
+          document.head.removeChild(script);
+        } catch (error) {
+          throw new Error(
+            `Failed to load WASM module from ${options.wasmUrl}: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
       } else {
         // Node.js or browser without custom URL
         if (!createPDQModuleFactory) {
