@@ -14,5 +14,22 @@ export type {
   SimilarityMatch,
 } from './types';
 
+// Browser utilities
+export {
+  createHashChecker,
+  hammingDistance,
+  generateHashFromDataUrl,
+  detectDuplicatesByHash,
+} from './browser';
+
+export type {
+  HashLookupResult,
+  HashChecker,
+  PDQImageData,
+  FileWithHash,
+  DetectionProgress,
+  ProgressCallback,
+} from './browser';
+
 // Re-export as default
 export { PDQ as default } from './pdq';
