@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "description": "WebAssembly bindings for Meta's PDQ perceptual image hashing algorithm",
   "main": "dist/index.js",
-  "module": "dist/index.mjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist",
