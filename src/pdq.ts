@@ -287,7 +287,7 @@ export class PDQ {
     includeIndex: boolean = false
   ): SimilarityMatch[] {
     if (referenceHash.length !== 32) {
-      throw new Error('Invalid reference hash length. PDQ hashes must be 32 bytes.');
+      throw new Error(`Invalid reference hash length. Expected 32 bytes, but got ${referenceHash.length}.`);
     }
 
     // Calculate distance and similarity for each hash
