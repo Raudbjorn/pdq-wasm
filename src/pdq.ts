@@ -67,31 +67,33 @@ export class PDQ {
           // Dynamically load the WASM module factory script
           const wasmJsUrl = options.wasmUrl.replace(/\.wasm$/, '.js');
 
-          // Load the Emscripten-generated JS file with error handling
-          const response = await fetch(wasmJsUrl);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch WASM JS from ${wasmJsUrl}: ${response.status} ${response.statusText}`);
+          // Security: Validate HTTPS URL to prevent insecure content
+          if (!/^https:\/\//.test(wasmJsUrl) && !/^http:\/\/localhost/.test(wasmJsUrl)) {
+            throw new Error(
+              `Insecure URL: ${wasmJsUrl}. Only HTTPS URLs are allowed for security (localhost HTTP is permitted for development).`
+            );
           }
 
-          // Use script tag injection instead of eval-like Function constructor for better security
+          // Use script.src for better security and CSP compliance
           const script = document.createElement('script');
-          script.textContent = await response.text();
+          script.src = wasmJsUrl;
+          script.async = false; // Ensure synchronous execution order
 
           // Load script and wait for createPDQModule to be available
           await new Promise<void>((resolve, reject) => {
-            script.onload = () => resolve();
-            script.onerror = () => reject(new Error('Failed to load WASM module script'));
+            script.onload = () => {
+              // Verify the factory function is available after load
+              if (typeof (window as any).createPDQModule === 'function') {
+                resolve();
+              } else {
+                reject(new Error('createPDQModule function not found after script load'));
+              }
+            };
+            script.onerror = () => reject(new Error(`Failed to load WASM module script from ${wasmJsUrl}`));
             document.head.appendChild(script);
-            // Script executes synchronously, so factory should be available immediately
-            if (typeof (window as any).createPDQModule === 'function') {
-              resolve();
-            }
           });
 
           const factory = (window as any).createPDQModule;
-          if (typeof factory !== 'function') {
-            throw new Error('createPDQModule function not found in loaded WASM script');
-          }
 
           // Initialize with the WASM URL
           this.module = await factory({
@@ -102,9 +104,6 @@ export class PDQ {
               return path;
             }
           });
-
-          // Clean up script tag
-          document.head.removeChild(script);
         } catch (error) {
           throw new Error(
             `Failed to load WASM module from ${options.wasmUrl}: ${error instanceof Error ? error.message : String(error)}`
