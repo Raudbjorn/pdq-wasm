@@ -13,11 +13,17 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}Building PDQ WebAssembly module...${NC}"
 
-# Check if emcc is available
+# Add Arch Linux's emscripten to PATH if it exists and emcc is not already available
 if ! command -v emcc &> /dev/null; then
-    echo -e "${RED}Error: emcc not found. Please install and activate Emscripten SDK.${NC}"
-    echo "Visit: https://emscripten.org/docs/getting_started/downloads.html"
-    exit 1
+    if [ -d "/usr/lib/emscripten" ] && [ -x "/usr/lib/emscripten/emcc" ]; then
+        echo -e "${YELLOW}Adding /usr/lib/emscripten to PATH (Arch Linux)${NC}"
+        export PATH="/usr/lib/emscripten:$PATH"
+    else
+        echo -e "${RED}Error: emcc not found. Please install and activate Emscripten SDK.${NC}"
+        echo "Visit: https://emscripten.org/docs/getting_started/downloads.html"
+        echo "On Arch Linux: sudo pacman -S emscripten"
+        exit 1
+    fi
 fi
 
 # Print Emscripten version

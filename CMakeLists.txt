@@ -8,7 +8,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(PDQ_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../pdq/cpp")
 
 # Include directories
+# Need parent directory so #include <pdq/cpp/...> works
 include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${PDQ_CPP_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/cpp
 )
@@ -42,12 +44,13 @@ if(EMSCRIPTEN)
         LINK_FLAGS "\
             -s WASM=1 \
             -s ALLOW_MEMORY_GROWTH=1 \
-            -s EXPORTED_RUNTIME_METHODS=['ccall','cwrap'] \
+            -s EXPORTED_RUNTIME_METHODS=['ccall','cwrap','getValue','setValue','HEAPU8','HEAP32'] \
             -s MODULARIZE=1 \
             -s EXPORT_NAME='createPDQModule' \
             -s ENVIRONMENT='web,node' \
             -s FILESYSTEM=0 \
             -s EXPORTED_FUNCTIONS='[\"_malloc\",\"_free\"]' \
+            -s STACK_SIZE=1MB \
             --no-entry \
             -O3"
     )
