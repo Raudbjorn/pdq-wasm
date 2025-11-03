@@ -23,18 +23,18 @@ describe('PDQ Image Similarity (Exhaustive Pairwise)', () => {
   beforeAll(async () => {
     await PDQ.init();
 
-    // Get all WebP images
+    // Get all image files (WebP, JPEG, PNG)
     const imageFiles = fs.readdirSync(FIXTURES_DIR)
-      .filter(f => f.endsWith('.webp'))
+      .filter(f => f.endsWith('.webp') || f.endsWith('.jpg') || f.endsWith('.png'))
       .sort();
 
-    console.log(`\nHashing ${imageFiles.length} images...`);
+    console.log(`\nHashing ${imageFiles.length} images (WebP, JPEG, PNG)...`);
 
     // Hash all images
     for (const filename of imageFiles) {
       const imagePath = path.join(FIXTURES_DIR, filename);
 
-      // Decode WebP using sharp
+      // Decode image using sharp
       const img = sharp(imagePath);
       const metadata = await img.metadata();
       const { data, info } = await img
@@ -59,7 +59,7 @@ describe('PDQ Image Similarity (Exhaustive Pairwise)', () => {
     }
 
     console.log(`✓ Hashed ${imageHashes.length} images\n`);
-  }, 120000); // 2 minute timeout for hashing all images
+  }, 240000); // 4 minute timeout for hashing all images
 
   describe('Self-comparison', () => {
     it('should have zero distance when comparing each image to itself', () => {
@@ -72,8 +72,9 @@ describe('PDQ Image Similarity (Exhaustive Pairwise)', () => {
 
   describe('Shape-based similarity', () => {
     it('Circle images should be more similar to each other than to Triangles', () => {
-      const circles = imageHashes.filter(h => h.filename.startsWith('Circle_'));
-      const triangles = imageHashes.filter(h => h.filename.startsWith('Triangle_'));
+      // Only compare within the same format to avoid compression differences
+      const circles = imageHashes.filter(h => h.filename.startsWith('Circle_') && h.filename.endsWith('.webp'));
+      const triangles = imageHashes.filter(h => h.filename.startsWith('Triangle_') && h.filename.endsWith('.webp'));
 
       // Skip if we don't have both shapes
       if (circles.length === 0 || triangles.length === 0) {
@@ -95,8 +96,9 @@ describe('PDQ Image Similarity (Exhaustive Pairwise)', () => {
     });
 
     it('Triangle images should be more similar to each other than to Squares', () => {
-      const triangles = imageHashes.filter(h => h.filename.startsWith('Triangle_'));
-      const squares = imageHashes.filter(h => h.filename.startsWith('Square_'));
+      // Only compare within the same format to avoid compression differences
+      const triangles = imageHashes.filter(h => h.filename.startsWith('Triangle_') && h.filename.endsWith('.webp'));
+      const squares = imageHashes.filter(h => h.filename.startsWith('Square_') && h.filename.endsWith('.webp'));
 
       if (triangles.length === 0 || squares.length === 0) {
         return;
@@ -134,6 +136,72 @@ describe('PDQ Image Similarity (Exhaustive Pairwise)', () => {
       // Distance should be in valid range
       expect(distance).toBeGreaterThanOrEqual(0);
       expect(distance).toBeLessThanOrEqual(256);
+    });
+  });
+
+  describe('Image format consistency', () => {
+    it('should produce similar hashes for the same image in different formats', () => {
+      // Test that WebP, JPEG, and PNG versions of the same image produce consistent hashes
+      // Note: Different formats may have compression artifacts, so we use the similarity threshold
+      const testImages = [
+        'Circle_black_white_100x150_original',
+        'Triangle_white_black_100x150_original',
+        'Square_black_white_100x150_original'
+      ];
+
+      let formatMatchCount = 0;
+      let formatTotalCount = 0;
+
+      for (const baseName of testImages) {
+        const webp = imageHashes.find(h => h.filename === `${baseName}.webp`);
+        const jpeg = imageHashes.find(h => h.filename === `${baseName}.jpg`);
+        const png = imageHashes.find(h => h.filename === `${baseName}.png`);
+
+        if (!webp || !jpeg || !png) continue;
+
+        // Compare WebP vs JPEG
+        const webpJpegDist = PDQ.hammingDistance(webp.hash, jpeg.hash);
+        // Compare WebP vs PNG
+        const webpPngDist = PDQ.hammingDistance(webp.hash, png.hash);
+        // Compare JPEG vs PNG
+        const jpegPngDist = PDQ.hammingDistance(jpeg.hash, png.hash);
+
+        formatTotalCount += 3;
+
+        // Count matches within similarity threshold
+        if (webpJpegDist <= similarityThreshold) formatMatchCount++;
+        if (webpPngDist <= similarityThreshold) formatMatchCount++;
+        if (jpegPngDist <= similarityThreshold) formatMatchCount++;
+
+        // Log all distances for analysis
+        console.log(`  ${baseName}:`);
+        console.log(`    WebP <-> JPEG: ${webpJpegDist} bits ${webpJpegDist <= similarityThreshold ? '✓' : '✗'}`);
+        console.log(`    WebP <-> PNG:  ${webpPngDist} bits ${webpPngDist <= similarityThreshold ? '✓' : '✗'}`);
+        console.log(`    JPEG <-> PNG:  ${jpegPngDist} bits ${jpegPngDist <= similarityThreshold ? '✓' : '✗'}`);
+      }
+
+      // Most format comparisons should match (allowing for some compression variance)
+      const matchRate = formatMatchCount / formatTotalCount;
+      console.log(`  Format consistency: ${formatMatchCount}/${formatTotalCount} (${(matchRate * 100).toFixed(1)}%)`);
+
+      // At least 50% should match within threshold
+      expect(matchRate).toBeGreaterThanOrEqual(0.5);
+    });
+
+    it('should hash all three image formats successfully', () => {
+      const webpCount = imageHashes.filter(h => h.filename.endsWith('.webp')).length;
+      const jpegCount = imageHashes.filter(h => h.filename.endsWith('.jpg')).length;
+      const pngCount = imageHashes.filter(h => h.filename.endsWith('.png')).length;
+
+      expect(webpCount).toBeGreaterThan(0);
+      expect(jpegCount).toBeGreaterThan(0);
+      expect(pngCount).toBeGreaterThan(0);
+
+      // Should have equal numbers of each format
+      expect(webpCount).toBe(jpegCount);
+      expect(jpegCount).toBe(pngCount);
+
+      console.log(`  Tested ${webpCount} WebP, ${jpegCount} JPEG, ${pngCount} PNG images`);
     });
   });
 
