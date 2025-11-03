@@ -150,6 +150,16 @@ See the [examples/](./examples/) directory for:
 
 Full documentation: [examples/README.md](./examples/README.md)
 
+### PostgreSQL Integration
+
+For storing and querying PDQ hashes in PostgreSQL databases:
+- Schema design for hash storage
+- Efficient similarity queries using SQL
+- Using `<` and `>` operators on distances
+- Batch operations and performance optimization
+
+Full guide: [docs/POSTGRESQL.md](./docs/POSTGRESQL.md)
+
 ## API Reference
 
 ### Initialization
@@ -307,6 +317,85 @@ Convert a hexadecimal string to PDQ hash.
 ```javascript
 const hash = PDQ.fromHex("a1b2c3d4e5f6...");
 ```
+
+## Hash Serialization
+
+PDQ hashes can be serialized in multiple formats for different use cases:
+
+### Hexadecimal (Recommended for Databases)
+
+```javascript
+const hexHash = PDQ.toHex(result.hash);
+// "a1b2c3d4e5f6..." (64 characters)
+
+// Store in PostgreSQL
+await client.query(
+  'INSERT INTO images (pdq_hash) VALUES ($1)',
+  [hexHash]
+);
+
+// Retrieve and deserialize
+const row = await client.query('SELECT pdq_hash FROM images WHERE id = $1', [id]);
+const hash = PDQ.fromHex(row.rows[0].pdq_hash);
+```
+
+**Best for:** SQL databases (VARCHAR(64) or TEXT), JSON, REST APIs
+
+### Binary (Most Efficient)
+
+```javascript
+const binaryHash = Buffer.from(result.hash);
+// 32 bytes
+
+// Store in PostgreSQL as BYTEA
+await client.query(
+  'INSERT INTO images (pdq_hash_binary) VALUES ($1)',
+  [binaryHash]
+);
+
+// Retrieve
+const row = await client.query('SELECT pdq_hash_binary FROM images WHERE id = $1', [id]);
+const hash = new Uint8Array(row.rows[0].pdq_hash_binary);
+```
+
+**Best for:** Binary databases, file storage, network transmission
+
+### Base64 (Web-Friendly)
+
+```javascript
+const base64Hash = Buffer.from(result.hash).toString('base64');
+// 44 characters
+
+// Use in URLs or JSON
+const response = {
+  imageId: 123,
+  pdqHash: base64Hash
+};
+
+// Deserialize
+const hash = new Uint8Array(Buffer.from(base64Hash, 'base64'));
+```
+
+**Best for:** URLs, JSON APIs, localStorage
+
+### Important: Comparing Distances, Not Hashes
+
+**You cannot use `<` and `>` on hash values** to determine similarity. Hashes must be compared using Hamming distance:
+
+```javascript
+// ❌ INCORRECT - comparing hash values directly
+if (hash1 < hash2) { /* This doesn't determine similarity! */ }
+
+// ✅ CORRECT - comparing distances
+const distance1 = PDQ.hammingDistance(referenceHash, hash1);
+const distance2 = PDQ.hammingDistance(referenceHash, hash2);
+
+if (distance1 < distance2) {
+  console.log('hash1 is more similar to reference than hash2');
+}
+```
+
+For PostgreSQL queries using `<` and `>`, see the [PostgreSQL Integration Guide](./docs/POSTGRESQL.md).
 
 ## Image Data Format
 
