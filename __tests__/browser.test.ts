@@ -375,7 +375,7 @@ describe('Browser Utilities', () => {
   });
 
   describe('hammingDistance', () => {
-    it('should calculate distance between two hex hashes', async () => {
+    it('should calculate distance between two hex hashes', () => {
       // Create two different hashes
       const imageData1 = {
         data: new Uint8Array(100 * 100 * 3).fill(0),
@@ -394,42 +394,42 @@ describe('Browser Utilities', () => {
       const hash1 = PDQ.toHex(PDQ.hash(imageData1).hash);
       const hash2 = PDQ.toHex(PDQ.hash(imageData2).hash);
 
-      const distance = await hammingDistance(hash1, hash2);
+      const distance = hammingDistance(hash1, hash2);
 
       expect(typeof distance).toBe('number');
       expect(distance).toBeGreaterThanOrEqual(0);
       expect(distance).toBeLessThanOrEqual(256);
     });
 
-    it('should return 0 for identical hashes', async () => {
+    it('should return 0 for identical hashes', () => {
       const hash = 'a'.repeat(64);
-      const distance = await hammingDistance(hash, hash);
+      const distance = hammingDistance(hash, hash);
       expect(distance).toBe(0);
     });
 
-    it('should throw error for invalid hash length', async () => {
+    it('should throw error for invalid hash length', () => {
       const validHash = 'a'.repeat(64);
       const invalidHash = 'a'.repeat(32);
 
-      await expect(hammingDistance(validHash, invalidHash)).rejects.toThrow(
+      expect(() => hammingDistance(validHash, invalidHash)).toThrow(
         'PDQ hashes must be exactly 64 hex characters'
       );
     });
 
-    it('should throw error for non-hex characters', async () => {
+    it('should throw error for non-hex characters', () => {
       const validHash = 'a'.repeat(64);
       const invalidHash = 'z'.repeat(64);
 
-      await expect(hammingDistance(validHash, invalidHash)).rejects.toThrow(
+      expect(() => hammingDistance(validHash, invalidHash)).toThrow(
         'PDQ hashes must contain only hexadecimal characters'
       );
     });
 
-    it('should accept both uppercase and lowercase', async () => {
+    it('should accept both uppercase and lowercase', () => {
       const lowerHash = 'abc123'.repeat(10) + 'abcd';
       const upperHash = 'ABC123'.repeat(10) + 'ABCD';
 
-      const distance = await hammingDistance(lowerHash, upperHash);
+      const distance = hammingDistance(lowerHash, upperHash);
       expect(distance).toBe(0); // Same hash
     });
   });

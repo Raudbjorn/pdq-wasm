@@ -17,6 +17,62 @@ export interface HashLookupResult {
 }
 
 /**
+ * Simple LRU (Least Recently Used) cache implementation
+ * @internal
+ */
+class LRUCache<K, V> {
+  private cache: Map<K, V>;
+  private maxSize: number;
+
+  constructor(maxSize: number) {
+    this.cache = new Map();
+    this.maxSize = maxSize;
+  }
+
+  get(key: K): V | undefined {
+    const value = this.cache.get(key);
+    if (value !== undefined) {
+      // Move to end (most recently used)
+      this.cache.delete(key);
+      this.cache.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: K, value: V): void {
+    // Delete if exists to update position
+    this.cache.delete(key);
+
+    // Add to end (most recently used)
+    this.cache.set(key, value);
+
+    // Evict least recently used if over size
+    if (this.cache.size > this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey);
+      }
+    }
+  }
+
+  has(key: K): boolean {
+    return this.cache.has(key);
+  }
+
+  delete(key: K): boolean {
+    return this.cache.delete(key);
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  get size(): number {
+    return this.cache.size;
+  }
+}
+
+/**
  * Hash checker function with optional chainable modifiers
  */
 export type HashChecker = ((hash: string) => Promise<HashLookupResult>) & {
@@ -38,20 +94,24 @@ export type HashChecker = ((hash: string) => Promise<HashLookupResult>) & {
    * Returns a new checker with result caching (memoization)
    *
    * @param ttl - Time-to-live in milliseconds (default: Infinity - cache forever)
+   * @param maxSize - Maximum number of entries to cache (default: 1000). Uses LRU eviction.
    *
    * @example
    * ```typescript
-   * // Cache forever
+   * // Cache forever with default max size (1000 entries)
    * const checker = createHashChecker(lookup).cached();
    *
-   * // Cache with 5 minute expiration
-   * const checker = createHashChecker(lookup).cached(5 * 60 * 1000);
+   * // Cache with 5 minute expiration and custom max size
+   * const checker = createHashChecker(lookup).cached(5 * 60 * 1000, 500);
+   *
+   * // Cache with custom max size only (no TTL)
+   * const checker = createHashChecker(lookup).cached(Infinity, 100);
    *
    * // Clear cache when needed
    * checker.clearCache?.();
    * ```
    */
-  cached(ttl?: number): HashChecker;
+  cached(ttl?: number, maxSize?: number): HashChecker;
 
   /**
    * Clears the cache (only available on cached checkers)
@@ -66,8 +126,9 @@ export type HashChecker = ((hash: string) => Promise<HashLookupResult>) & {
 interface CheckerOptions {
   ignoreInvalid: boolean;
   cached: boolean;
-  cache: Map<string, { result: HashLookupResult; timestamp: number }>;
+  cache: LRUCache<string, { result: HashLookupResult; timestamp: number }>;
   cacheTTL: number;
+  cacheMaxSize: number;
 }
 
 /**
@@ -135,8 +196,9 @@ export function createHashChecker(
   return createCheckerWithOptions(lookup, {
     ignoreInvalid: false,
     cached: false,
-    cache: new Map(),
-    cacheTTL: Infinity
+    cache: new LRUCache(1000), // Default max size
+    cacheTTL: Infinity,
+    cacheMaxSize: 1000
   });
 }
 
@@ -198,11 +260,13 @@ function createCheckerWithOptions(
     });
   };
 
-  (checker as any).cached = (ttl: number = Infinity) => {
+  (checker as any).cached = (ttl: number = Infinity, maxSize: number = 1000) => {
     return createCheckerWithOptions(lookup, {
       ...options,
       cached: true,
-      cacheTTL: ttl
+      cacheTTL: ttl,
+      cache: new LRUCache(maxSize),
+      cacheMaxSize: maxSize
     });
   };
 
@@ -231,7 +295,7 @@ function createCheckerWithOptions(
  * const hash1 = 'a1b2c3d4...'; // 64 hex chars
  * const hash2 = 'e5f6g7h8...'; // 64 hex chars
  *
- * const distance = await hammingDistance(hash1, hash2);
+ * const distance = hammingDistance(hash1, hash2);
  * console.log(`Distance: ${distance} bits`);
  *
  * if (distance <= 31) {
@@ -239,7 +303,7 @@ function createCheckerWithOptions(
  * }
  * ```
  */
-export async function hammingDistance(hash1: string, hash2: string): Promise<number> {
+export function hammingDistance(hash1: string, hash2: string): number {
   if (hash1.length !== 64 || hash2.length !== 64) {
     throw new Error('PDQ hashes must be exactly 64 hex characters');
   }
@@ -269,6 +333,10 @@ export interface PDQImageData {
  * Generate PDQ perceptual hash from an image data URL or blob URL
  * Browser-only function that uses DOM APIs (Image, Canvas) for image processing
  *
+ * **Important:** This function does NOT automatically revoke blob URLs. When using
+ * `URL.createObjectURL()`, you must call `URL.revokeObjectURL()` after hashing
+ * to prevent memory leaks.
+ *
  * @param dataUrl - Image data URL (data:image/...) or blob URL (blob:...)
  * @returns Promise resolving to 64-character hex hash string
  *
@@ -278,17 +346,20 @@ export interface PDQImageData {
  *
  * @example
  * ```typescript
- * // From file input
+ * // From file input - REMEMBER to revoke blob URL!
  * const file = input.files[0];
- * const dataUrl = URL.createObjectURL(file);
- * const hash = await generateHashFromDataUrl(dataUrl);
- * console.log(`PDQ hash: ${hash}`);
- * URL.revokeObjectURL(dataUrl);
+ * const blobUrl = URL.createObjectURL(file);
+ * try {
+ *   const hash = await generateHashFromDataUrl(blobUrl);
+ *   console.log(`PDQ hash: ${hash}`);
+ * } finally {
+ *   URL.revokeObjectURL(blobUrl); // Always clean up!
+ * }
  * ```
  *
  * @example
  * ```typescript
- * // From canvas
+ * // From canvas (data URLs don't need cleanup)
  * const canvas = document.getElementById('myCanvas');
  * const dataUrl = canvas.toDataURL('image/png');
  * const hash = await generateHashFromDataUrl(dataUrl);
@@ -548,8 +619,8 @@ export async function detectDuplicatesByHash(
       const file2 = filesWithHashes[j];
       if (!file2.meta?.hash || processed.has(file2.id)) continue;
 
-      // Calculate PDQ hamming distance
-      const distance = await hammingDistance(file1.meta.hash, file2.meta.hash);
+      // Calculate PDQ hamming distance (synchronous - no I/O)
+      const distance = hammingDistance(file1.meta.hash, file2.meta.hash);
 
       if (distance <= threshold) {
         group.push(file2);
