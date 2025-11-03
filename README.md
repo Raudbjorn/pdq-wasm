@@ -99,12 +99,12 @@ For browser environments, you can load the WASM module from a CDN:
 
 ```html
 <script type="module">
-  import { PDQ } from 'https://unpkg.com/pdq-wasm@0.3.0/dist/index.js';
+  import { PDQ } from 'https://unpkg.com/pdq-wasm@0.3.2/dist/index.js';
 
   async function main() {
     // Initialize with WASM URL from CDN
     await PDQ.init({
-      wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.0/wasm/pdq.wasm'
+      wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.2/wasm/pdq.wasm'
     });
 
     // Now use PDQ as normal
@@ -140,8 +140,8 @@ For browser environments, you can load the WASM module from a CDN:
 ```
 
 **Available CDN URLs:**
-- **unpkg**: `https://unpkg.com/pdq-wasm@0.3.0/wasm/pdq.wasm`
-- **jsDelivr**: `https://cdn.jsdelivr.net/npm/pdq-wasm@0.3.0/wasm/pdq.wasm`
+- **unpkg**: `https://unpkg.com/pdq-wasm@0.3.2/wasm/pdq.wasm`
+- **jsDelivr**: `https://cdn.jsdelivr.net/npm/pdq-wasm@0.3.2/wasm/pdq.wasm`
 - **GitHub Releases**: `https://github.com/Raudbjorn/pdq-wasm/releases/download/v0.3.0/pdq.wasm` (after uploading WASM as release asset)
 
 For production use with a custom domain, you can:
