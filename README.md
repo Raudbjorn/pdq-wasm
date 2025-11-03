@@ -93,6 +93,59 @@ const result = await hashImage(imageData);
 const hexHash: string = PDQ.toHex(result.hash);
 ```
 
+### Browser (with CDN)
+
+For browser environments, you can load the WASM module from a CDN:
+
+```html
+<script type="module">
+  import { PDQ } from 'https://unpkg.com/pdq-wasm@0.2.0/dist/index.js';
+
+  async function main() {
+    // Initialize with WASM URL from CDN
+    await PDQ.init({
+      wasmUrl: 'https://unpkg.com/pdq-wasm@0.2.0/wasm/pdq.wasm'
+    });
+
+    // Now use PDQ as normal
+    const canvas = document.getElementById('myCanvas');
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Extract RGB data (skip alpha channel)
+    const rgbData = new Uint8Array(canvas.width * canvas.height * 3);
+    let rgbIndex = 0;
+    for (let i = 0; i < imageData.data.length; i += 4) {
+      rgbData[rgbIndex++] = imageData.data[i];     // R
+      rgbData[rgbIndex++] = imageData.data[i + 1]; // G
+      rgbData[rgbIndex++] = imageData.data[i + 2]; // B
+    }
+
+    const result = PDQ.hash({
+      data: rgbData,
+      width: canvas.width,
+      height: canvas.height,
+      channels: 3
+    });
+
+    console.log('Hash:', PDQ.toHex(result.hash));
+    console.log('Quality:', result.quality);
+  }
+
+  main();
+</script>
+```
+
+**Available CDN URLs:**
+- **unpkg**: `https://unpkg.com/pdq-wasm@0.2.0/wasm/pdq.wasm`
+- **jsDelivr**: `https://cdn.jsdelivr.net/npm/pdq-wasm@0.2.0/wasm/pdq.wasm`
+- **GitHub Releases**: `https://github.com/Raudbjorn/pdq-wasm/releases/download/v0.2.0/pdq.wasm` (after uploading WASM as release asset)
+
+For production use with a custom domain, you can:
+1. Set up GitHub Pages to serve the WASM files
+2. Configure a CNAME for your domain
+3. Load from your custom domain: `https://cdn.yourdomain.com/pdq.wasm`
+
 ## Examples
 
 We provide comprehensive examples for both browser and Node.js environments:

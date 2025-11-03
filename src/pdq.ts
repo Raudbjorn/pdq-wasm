@@ -41,6 +41,19 @@ export class PDQ {
   /**
    * Initialize the WASM module
    * Must be called before using any PDQ functions
+   *
+   * @param options Configuration options
+   * @param options.wasmUrl URL to load WASM module from (browser only)
+   *
+   * @example
+   * // Node.js (uses bundled WASM)
+   * await PDQ.init();
+   *
+   * @example
+   * // Browser with CDN
+   * await PDQ.init({
+   *   wasmUrl: 'https://unpkg.com/pdq-wasm@0.2.0/wasm/pdq.wasm'
+   * });
    */
   static async init(options: PDQOptions = {}): Promise<void> {
     if (this.initPromise) {
@@ -48,13 +61,41 @@ export class PDQ {
     }
 
     this.initPromise = (async () => {
-      if (!createPDQModuleFactory) {
-        throw new Error(
-          'PDQ WASM module not available. Make sure to run: npm run build:wasm'
-        );
-      }
+      // Browser environment with custom WASM URL
+      if (options.wasmUrl && typeof window !== 'undefined') {
+        // Dynamically load the WASM module factory script
+        const wasmJsUrl = options.wasmUrl.replace(/\.wasm$/, '.js');
 
-      this.module = await createPDQModuleFactory(options);
+        // Load the Emscripten-generated JS file
+        const response = await fetch(wasmJsUrl);
+        const moduleCode = await response.text();
+
+        // Execute the module code to get the factory function
+        const moduleFunc = new Function('Module', moduleCode + '; return createPDQModule;');
+        const factory = moduleFunc();
+
+        // Initialize with the WASM URL
+        this.module = await factory({
+          locateFile: (path: string) => {
+            if (path.endsWith('.wasm')) {
+              return options.wasmUrl!;
+            }
+            return path;
+          }
+        });
+      } else {
+        // Node.js or browser without custom URL
+        if (!createPDQModuleFactory) {
+          throw new Error(
+            'PDQ WASM module not available. ' +
+            (typeof window !== 'undefined'
+              ? 'Provide wasmUrl option or bundle the WASM module.'
+              : 'Make sure to run: npm run build:wasm')
+          );
+        }
+
+        this.module = await createPDQModuleFactory(options);
+      }
     })();
 
     return this.initPromise;
