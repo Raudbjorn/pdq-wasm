@@ -19,7 +19,11 @@
     "build": "npm run build:wasm && npm run build:ts",
     "test": "jest",
     "clean": "rm -rf dist build",
-    "prepublishOnly": "npm run clean && npm run build"
+    "prepublishOnly": "npm run clean && npm run build",
+    "deploy": "bash scripts/deploy.sh",
+    "deploy:patch": "bash scripts/deploy.sh patch",
+    "deploy:minor": "bash scripts/deploy.sh minor",
+    "deploy:major": "bash scripts/deploy.sh major"
   },
   "keywords": [
     "pdq",
