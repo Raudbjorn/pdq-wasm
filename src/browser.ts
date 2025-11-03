@@ -252,15 +252,17 @@ function createCheckerWithOptions(
     return result;
   };
 
-  // Attach chainable methods
-  (checker as any).ignoreInvalid = () => {
+  // Attach chainable methods (cast once for type safety)
+  const hashChecker = checker as HashChecker;
+
+  hashChecker.ignoreInvalid = () => {
     return createCheckerWithOptions(lookup, {
       ...options,
       ignoreInvalid: true
     });
   };
 
-  (checker as any).cached = (ttl: number = Infinity, maxSize: number = 1000) => {
+  hashChecker.cached = (ttl: number = Infinity, maxSize: number = 1000) => {
     return createCheckerWithOptions(lookup, {
       ...options,
       cached: true,
@@ -272,12 +274,12 @@ function createCheckerWithOptions(
 
   // Add cache management for cached checkers
   if (options.cached) {
-    (checker as any).clearCache = () => {
+    hashChecker.clearCache = () => {
       options.cache.clear();
     };
   }
 
-  return checker as HashChecker;
+  return hashChecker;
 }
 
 /**
@@ -319,14 +321,14 @@ export function hammingDistance(hash1: string, hash2: string): number {
 }
 
 /**
- * Image data structure for PDQ hashing (browser-friendly version)
- * Supports RGBA from canvas, which will be converted to RGB
+ * Image data structure for PDQ hashing
+ * Note: RGBA data from canvas is automatically converted to RGB internally
  */
 export interface PDQImageData {
   data: Uint8Array;
   width: number;
   height: number;
-  channels: 1 | 3 | 4;
+  channels: 1 | 3;
 }
 
 /**
@@ -543,64 +545,34 @@ export async function detectDuplicatesByHash(
 
   // Generate hashes for all images, tracking any errors
   const filesWithHashes = await Promise.all(
-    imageFiles.map(async (file, index) => {
+    imageFiles.map(async (file) => {
+      const newMeta: { hash: string | null; hashError?: string } = { hash: null };
+
       try {
-        // Report progress before processing
-        if (onProgress) {
-          onProgress({
-            totalFiles: imageFiles.length,
-            processedFiles: index,
-            currentFile: file.name,
-            duplicatesFound: 0
-          });
-        }
-
-        const hash = await generateHashFromDataUrl(file.preview);
-
-        processedFiles++;
-
-        // Report progress after processing
-        if (onProgress) {
-          onProgress({
-            totalFiles: imageFiles.length,
-            processedFiles,
-            currentFile: file.name,
-            duplicatesFound: 0
-          });
-        }
-
-        return {
-          ...file,
-          meta: {
-            ...file.meta,
-            hash,
-            hashError: undefined
-          }
-        };
+        newMeta.hash = await generateHashFromDataUrl(file.preview);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-
-        processedFiles++;
-
-        // Report progress even on error
-        if (onProgress) {
-          onProgress({
-            totalFiles: imageFiles.length,
-            processedFiles,
-            currentFile: file.name,
-            duplicatesFound: 0
-          });
-        }
-
-        return {
-          ...file,
-          meta: {
-            ...file.meta,
-            hash: null,
-            hashError: errorMessage
-          }
-        };
+        newMeta.hashError = error instanceof Error ? error.message : String(error);
       }
+
+      processedFiles++;
+
+      // Report progress after processing (single progress update per file)
+      if (onProgress) {
+        onProgress({
+          totalFiles: imageFiles.length,
+          processedFiles,
+          currentFile: file.name,
+          duplicatesFound
+        });
+      }
+
+      return {
+        ...file,
+        meta: {
+          ...file.meta,
+          ...newMeta
+        }
+      };
     })
   );
 

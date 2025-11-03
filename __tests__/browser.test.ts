@@ -512,12 +512,15 @@ describe('Browser Utilities', () => {
 
       await detectDuplicatesByHash(files, 31, onProgress);
 
-      // Should have progress updates
-      expect(progressUpdates.length).toBeGreaterThan(0);
+      // Should have progress updates (one per file + final)
+      expect(progressUpdates.length).toBeGreaterThanOrEqual(3);
 
-      // First update should have processedFiles = 0
-      expect(progressUpdates[0].processedFiles).toBe(0);
+      // First update should have processedFiles = 1 (after first file)
+      expect(progressUpdates[0].processedFiles).toBe(1);
       expect(progressUpdates[0].totalFiles).toBe(3);
+
+      // Progress should increment
+      expect(progressUpdates[1].processedFiles).toBe(2);
 
       // Last update should have all files processed
       const lastUpdate = progressUpdates[progressUpdates.length - 1];
@@ -568,19 +571,6 @@ describe('Browser Utilities', () => {
 
       // Lenient should find more or equal duplicates
       expect(lenientDuplicates.length).toBeGreaterThanOrEqual(strictDuplicates.length);
-    });
-
-    it('should attach hash metadata to files', async () => {
-      const files: FileWithHash[] = [
-        createMockFile('1', 'image1.jpg'),
-        createMockFile('2', 'image2.jpg')
-      ];
-
-      await detectDuplicatesByHash(files);
-
-      // Files should have been processed (even if no duplicates)
-      // The function processes all files to generate hashes
-      expect(true).toBe(true); // Just verify no errors
     });
   });
 });
