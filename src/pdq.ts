@@ -269,7 +269,8 @@ export class PDQ {
    */
   static similarity(hash1: PDQHash, hash2: PDQHash): number {
     const distance = this.hammingDistance(hash1, hash2);
-    return ((256 - distance) / 256) * 100;
+    const maxBits = hash1.length * 8; // Total bits in hash
+    return ((maxBits - distance) / maxBits) * 100;
   }
 
   /**
@@ -286,18 +287,23 @@ export class PDQ {
     hashes: PDQHash[],
     includeIndex: boolean = false
   ): SimilarityMatch[] {
+    // Validate reference hash length (PDQ hashes are always 32 bytes)
     if (referenceHash.length !== 32) {
-      throw new Error(`Invalid reference hash length. Expected 32 bytes, but got ${referenceHash.length}.`);
+      throw new Error('Invalid reference hash length. PDQ hashes must be 32 bytes.');
     }
+
+    const expectedLength = referenceHash.length;
 
     // Calculate distance and similarity for each hash
     const matches: SimilarityMatch[] = hashes.map((hash, index) => {
-      if (hash.length !== 32) {
-        throw new Error(`Invalid hash length at index ${index}. Expected 32 bytes, got ${hash.length}.`);
+      if (hash.length !== expectedLength) {
+        throw new Error(
+          `Invalid hash length at index ${index}. Expected ${expectedLength} bytes, got ${hash.length}.`
+        );
       }
 
       const distance = this.hammingDistance(referenceHash, hash);
-      const similarity = ((256 - distance) / 256) * 100;
+      const similarity = this.similarity(referenceHash, hash);
 
       const match: SimilarityMatch = {
         hash,
@@ -313,7 +319,16 @@ export class PDQ {
     });
 
     // Sort by distance (ascending - most similar first)
-    matches.sort((a, b) => a.distance - b.distance);
+    // Use secondary sort by original index for stable ordering
+    matches.sort((a, b) => {
+      if (a.distance !== b.distance) {
+        return a.distance - b.distance;
+      }
+      // When distances are equal, maintain original order
+      const indexA = includeIndex ? (a.index ?? 0) : hashes.indexOf(a.hash);
+      const indexB = includeIndex ? (b.index ?? 0) : hashes.indexOf(b.hash);
+      return indexA - indexB;
+    });
 
     return matches;
   }
