@@ -56,7 +56,7 @@ if(EMSCRIPTEN)
     )
 
     set_target_properties(pdq PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/wasm"
         OUTPUT_NAME "pdq"
     )
 endif()

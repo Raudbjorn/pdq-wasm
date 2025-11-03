@@ -7,12 +7,13 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "wasm",
     "LICENSE",
     "README.md"
   ],
   "scripts": {
     "build:wasm": "bash scripts/build-wasm.sh",
-    "build:ts": "tsc && tsc --module es2015 --outDir dist/esm",
+    "build:ts": "tsc",
     "build": "npm run build:wasm && npm run build:ts",
     "test": "jest",
     "clean": "rm -rf dist build",

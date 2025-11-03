@@ -7,6 +7,7 @@ scripts/
 # Build files
 CMakeLists.txt
 tsconfig.json
+tsconfig.esm.json
 jest.config.js
 build/
 
@@ -15,10 +16,15 @@ build/
 .gitignore
 *.md
 !README.md
+test-*.js
 
 # CI/CD
 .github/
 .vscode/
+.claude/
 
 # Tests
 coverage/
+
+# Keep wasm directory for distribution
+!wasm/

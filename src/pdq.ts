@@ -13,6 +13,23 @@ import type {
   PDQOptions,
 } from './types';
 
+// Import the WASM module factory
+// This will be resolved differently in Node.js vs browser
+let createPDQModuleFactory: any;
+
+if (typeof process !== 'undefined' && process.versions?.node) {
+  // Node.js environment
+  try {
+    createPDQModuleFactory = require('../wasm/pdq.js');
+  } catch (e) {
+    // WASM module not built yet
+    createPDQModuleFactory = null;
+  }
+} else {
+  // Browser environment - will need to be provided via options
+  createPDQModuleFactory = null;
+}
+
 /**
  * PDQ WebAssembly implementation
  */
@@ -30,41 +47,16 @@ export class PDQ {
     }
 
     this.initPromise = (async () => {
-      // Dynamic import of the WASM module
-      // This will be replaced with actual module loading logic
-      const createModule = await this.loadModule(options);
-      this.module = await createModule();
+      if (!createPDQModuleFactory) {
+        throw new Error(
+          'PDQ WASM module not available. Make sure to run: npm run build:wasm'
+        );
+      }
+
+      this.module = await createPDQModuleFactory(options);
     })();
 
     return this.initPromise;
-  }
-
-  /**
-   * Load the WASM module (platform-specific)
-   */
-  private static async loadModule(options: PDQOptions): Promise<any> {
-    // In Node.js
-    if (typeof process !== 'undefined' && process.versions?.node) {
-      const path = require('path');
-      const fs = require('fs');
-
-      // Try to load the WASM file
-      const wasmPath = path.join(__dirname, '../dist/pdq.wasm');
-
-      return async () => {
-        // Placeholder - will be replaced with actual Emscripten module loader
-        throw new Error('WASM module not yet built. Run: npm run build:wasm');
-      };
-    }
-
-    // In browser
-    if (typeof window !== 'undefined') {
-      return async () => {
-        throw new Error('WASM module not yet built. Run: npm run build:wasm');
-      };
-    }
-
-    throw new Error('Unsupported environment');
   }
 
   /**

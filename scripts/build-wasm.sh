@@ -45,12 +45,7 @@ emcmake cmake ..
 echo -e "${GREEN}Compiling...${NC}"
 emmake make
 
-# Copy output to dist
-echo -e "${GREEN}Copying output files...${NC}"
+# Output is already in wasm/ directory
+echo -e "${GREEN}Build complete! Output files in wasm/${NC}"
 cd ..
-mkdir -p dist
-cp build/pdq.wasm dist/ 2>/dev/null || true
-cp build/pdq.js dist/ 2>/dev/null || true
-
-echo -e "${GREEN}Build complete! Output files in dist/${NC}"
-ls -lh dist/
+ls -lh wasm/ 2>/dev/null || echo "Output directory: wasm/"
