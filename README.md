@@ -238,6 +238,45 @@ const similarity = PDQ.similarity(hash1, hash2);
 console.log(`${similarity.toFixed(2)}% similar`);
 ```
 
+#### `PDQ.orderBySimilarity(referenceHash, hashes, includeIndex?): SimilarityMatch[]`
+
+Order an array of hashes by similarity to a reference hash. Returns hashes sorted from most similar to least similar.
+
+**Parameters:**
+- `referenceHash`: `Uint8Array` - The reference hash to compare against
+- `hashes`: `Uint8Array[]` - Array of hashes to order
+- `includeIndex`: `boolean` - Whether to include original array index (default: false)
+
+**Returns:** `SimilarityMatch[]` - Array of objects containing:
+- `hash`: `Uint8Array` - The hash
+- `distance`: `number` - Hamming distance from reference (0-256)
+- `similarity`: `number` - Similarity percentage (0-100)
+- `index?`: `number` - Original array index (if includeIndex is true)
+
+**Example:**
+```javascript
+const referenceHash = PDQ.hash(referenceImage).hash;
+const candidateHashes = [hash1, hash2, hash3, hash4];
+
+// Order by similarity
+const ordered = PDQ.orderBySimilarity(referenceHash, candidateHashes);
+
+// Most similar first
+console.log('Most similar:', PDQ.toHex(ordered[0].hash));
+console.log('Distance:', ordered[0].distance);
+console.log('Similarity:', ordered[0].similarity.toFixed(2) + '%');
+
+// With original indices
+const withIndices = PDQ.orderBySimilarity(referenceHash, candidateHashes, true);
+console.log('Original index:', withIndices[0].index);
+```
+
+**Use Cases:**
+- Find top-N most similar images
+- Rank search results by similarity
+- Deduplicate image collections
+- Build image recommendation systems
+
 ### Format Conversion
 
 #### `PDQ.toHex(hash): string`
@@ -373,8 +412,8 @@ node test-basic.js
 ```
 
 Test coverage:
-- ✅ **43 tests total** (100% pass rate)
-- ✅ 30 unit tests covering all API functions
+- ✅ **52 tests total** (100% pass rate)
+- ✅ 39 unit tests covering all API functions
 - ✅ 13 pairwise image similarity tests
 - ✅ Initialization and error handling
 - ✅ Hash generation (grayscale and RGB)

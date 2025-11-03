@@ -408,4 +408,178 @@ describe('PDQ', () => {
       expect(distance).toBeLessThan(32); // Should be very similar
     });
   });
+
+  describe('similarity ordering', () => {
+    it('should order hashes by similarity to reference', () => {
+      // Create a reference hash
+      const referenceImage = {
+        data: new Uint8Array(100).fill(128),
+        width: 10,
+        height: 10,
+        channels: 1 as const,
+      };
+      const referenceHash = PDQ.hash(referenceImage).hash;
+
+      // Create several test hashes with varying similarity
+      const whiteImage = {
+        data: new Uint8Array(100).fill(255),
+        width: 10,
+        height: 10,
+        channels: 1 as const,
+      };
+      const whiteHash = PDQ.hash(whiteImage).hash;
+
+      const blackImage = {
+        data: new Uint8Array(100).fill(0),
+        width: 10,
+        height: 10,
+        channels: 1 as const,
+      };
+      const blackHash = PDQ.hash(blackImage).hash;
+
+      const similarImage = {
+        data: new Uint8Array(100).fill(130),
+        width: 10,
+        height: 10,
+        channels: 1 as const,
+      };
+      const similarHash = PDQ.hash(similarImage).hash;
+
+      const hashes = [blackHash, whiteHash, similarHash];
+
+      const ordered = PDQ.orderBySimilarity(referenceHash, hashes);
+
+      // Should return array of SimilarityMatch objects
+      expect(ordered).toHaveLength(3);
+      expect(ordered[0]).toHaveProperty('hash');
+      expect(ordered[0]).toHaveProperty('distance');
+      expect(ordered[0]).toHaveProperty('similarity');
+
+      // First item should be most similar (similarHash or referenceHash itself)
+      // Distances should be in ascending order
+      expect(ordered[0].distance).toBeLessThanOrEqual(ordered[1].distance);
+      expect(ordered[1].distance).toBeLessThanOrEqual(ordered[2].distance);
+
+      // Similarity should be in descending order
+      expect(ordered[0].similarity).toBeGreaterThanOrEqual(ordered[1].similarity);
+      expect(ordered[1].similarity).toBeGreaterThanOrEqual(ordered[2].similarity);
+    });
+
+    it('should include original index when requested', () => {
+      const referenceHash = new Uint8Array(32).fill(0);
+
+      const hash1 = new Uint8Array(32).fill(0);
+      hash1[0] = 1; // Distance: 1
+
+      const hash2 = new Uint8Array(32).fill(0);
+      hash2[0] = 255; // Distance: 8
+
+      const hash3 = new Uint8Array(32).fill(0);
+      hash3[0] = 3; // Distance: 2
+
+      const hashes = [hash1, hash2, hash3];
+
+      const ordered = PDQ.orderBySimilarity(referenceHash, hashes, true);
+
+      // Should include index property
+      expect(ordered[0]).toHaveProperty('index');
+      expect(ordered[1]).toHaveProperty('index');
+      expect(ordered[2]).toHaveProperty('index');
+
+      // Indices should reflect original positions
+      expect(ordered[0].index).toBe(0); // hash1 was at index 0
+      expect(ordered[1].index).toBe(2); // hash3 was at index 2
+      expect(ordered[2].index).toBe(1); // hash2 was at index 1
+    });
+
+    it('should not include index when not requested', () => {
+      const referenceHash = new Uint8Array(32).fill(0);
+      const hash1 = new Uint8Array(32).fill(0);
+      const hash2 = new Uint8Array(32).fill(1);
+
+      const hashes = [hash1, hash2];
+
+      const ordered = PDQ.orderBySimilarity(referenceHash, hashes, false);
+
+      expect(ordered[0].index).toBeUndefined();
+      expect(ordered[1].index).toBeUndefined();
+    });
+
+    it('should handle empty array', () => {
+      const referenceHash = new Uint8Array(32).fill(0);
+      const hashes: Uint8Array[] = [];
+
+      const ordered = PDQ.orderBySimilarity(referenceHash, hashes);
+
+      expect(ordered).toHaveLength(0);
+    });
+
+    it('should handle single hash', () => {
+      const referenceHash = new Uint8Array(32).fill(0);
+      const hash = new Uint8Array(32).fill(1);
+
+      const ordered = PDQ.orderBySimilarity(referenceHash, [hash]);
+
+      expect(ordered).toHaveLength(1);
+      expect(ordered[0].hash).toBe(hash);
+    });
+
+    it('should throw error for invalid reference hash length', () => {
+      const invalidHash = new Uint8Array(16); // Wrong length
+      const hash = new Uint8Array(32).fill(0);
+
+      expect(() => PDQ.orderBySimilarity(invalidHash, [hash])).toThrow('Invalid reference hash length');
+    });
+
+    it('should throw error for invalid hash in array', () => {
+      const referenceHash = new Uint8Array(32).fill(0);
+      const validHash = new Uint8Array(32).fill(0);
+      const invalidHash = new Uint8Array(16).fill(0); // Wrong length
+
+      expect(() => PDQ.orderBySimilarity(referenceHash, [validHash, invalidHash])).toThrow('Invalid hash length at index 1');
+    });
+
+    it('should calculate correct distance and similarity values', () => {
+      const referenceHash = new Uint8Array(32).fill(0);
+
+      // Create hash with known distance
+      const testHash = new Uint8Array(32).fill(0);
+      testHash[0] = 255; // 8 bits different
+      testHash[1] = 255; // 8 bits different
+      // Total: 16 bits different
+
+      const ordered = PDQ.orderBySimilarity(referenceHash, [testHash]);
+
+      expect(ordered[0].distance).toBe(16);
+      expect(ordered[0].similarity).toBeCloseTo(((256 - 16) / 256) * 100, 1);
+    });
+
+    it('should maintain sort stability for equal distances', () => {
+      const referenceHash = new Uint8Array(32).fill(0);
+
+      // Create multiple hashes with same distance
+      const hash1 = new Uint8Array(32).fill(0);
+      hash1[0] = 1; // Distance: 1
+
+      const hash2 = new Uint8Array(32).fill(0);
+      hash2[1] = 1; // Distance: 1
+
+      const hash3 = new Uint8Array(32).fill(0);
+      hash3[2] = 1; // Distance: 1
+
+      const hashes = [hash1, hash2, hash3];
+
+      const ordered = PDQ.orderBySimilarity(referenceHash, hashes, true);
+
+      // All should have same distance
+      expect(ordered[0].distance).toBe(1);
+      expect(ordered[1].distance).toBe(1);
+      expect(ordered[2].distance).toBe(1);
+
+      // Indices should reflect original order (stable sort)
+      expect(ordered[0].index).toBe(0);
+      expect(ordered[1].index).toBe(1);
+      expect(ordered[2].index).toBe(2);
+    });
+  });
 });

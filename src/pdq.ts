@@ -11,6 +11,7 @@ import type {
   ImageData,
   PDQWasmModule,
   PDQOptions,
+  SimilarityMatch,
 } from './types';
 
 // Import the WASM module factory
@@ -269,6 +270,52 @@ export class PDQ {
   static similarity(hash1: PDQHash, hash2: PDQHash): number {
     const distance = this.hammingDistance(hash1, hash2);
     return ((256 - distance) / 256) * 100;
+  }
+
+  /**
+   * Order an array of hashes by similarity to a reference hash
+   * Returns hashes sorted from most similar to least similar
+   *
+   * @param referenceHash The reference hash to compare against
+   * @param hashes Array of hashes to order
+   * @param includeIndex Whether to include original array index (default: false)
+   * @returns Array of SimilarityMatch objects ordered by distance (ascending)
+   */
+  static orderBySimilarity(
+    referenceHash: PDQHash,
+    hashes: PDQHash[],
+    includeIndex: boolean = false
+  ): SimilarityMatch[] {
+    if (referenceHash.length !== 32) {
+      throw new Error('Invalid reference hash length. PDQ hashes must be 32 bytes.');
+    }
+
+    // Calculate distance and similarity for each hash
+    const matches: SimilarityMatch[] = hashes.map((hash, index) => {
+      if (hash.length !== 32) {
+        throw new Error(`Invalid hash length at index ${index}. PDQ hashes must be 32 bytes.`);
+      }
+
+      const distance = this.hammingDistance(referenceHash, hash);
+      const similarity = ((256 - distance) / 256) * 100;
+
+      const match: SimilarityMatch = {
+        hash,
+        distance,
+        similarity,
+      };
+
+      if (includeIndex) {
+        match.index = index;
+      }
+
+      return match;
+    });
+
+    // Sort by distance (ascending - most similar first)
+    matches.sort((a, b) => a.distance - b.distance);
+
+    return matches;
   }
 }
 

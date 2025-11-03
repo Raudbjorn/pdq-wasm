@@ -210,26 +210,41 @@ for (const bannedHash of bannedHashes) {
 ### Similar Image Search
 
 ```javascript
-// Find images similar to a query image
+// Find images similar to a query image using orderBySimilarity
 const queryHash = PDQ.hash(queryImageData);
-const results = [];
 
-for (const dbImage of imageDatabase) {
-  const distance = PDQ.hammingDistance(queryHash.hash, dbImage.hash);
-  const similarity = PDQ.similarity(queryHash.hash, dbImage.hash);
+// Extract hashes from database
+const dbHashes = imageDatabase.map(img => img.hash);
 
-  results.push({
-    image: dbImage,
-    distance,
-    similarity
-  });
-}
+// Order by similarity (most similar first)
+const ordered = PDQ.orderBySimilarity(queryHash.hash, dbHashes, true);
 
-// Sort by similarity
-results.sort((a, b) => a.distance - b.distance);
+// Get top 10 most similar with original indices
+const topResults = ordered.slice(0, 10).map(match => ({
+  image: imageDatabase[match.index],
+  distance: match.distance,
+  similarity: match.similarity
+}));
 
-// Get top 10 most similar
-const topResults = results.slice(0, 10);
+console.log('Top 10 similar images:');
+topResults.forEach((result, i) => {
+  console.log(`${i + 1}. ${result.image.name}: ${result.similarity.toFixed(2)}% similar`);
+});
+```
+
+### Efficient Batch Similarity Ranking
+
+```javascript
+// Old approach: manual sorting (O(n log n) + O(n) comparisons)
+const results = dbHashes.map(hash => ({
+  hash,
+  distance: PDQ.hammingDistance(queryHash, hash),
+  similarity: PDQ.similarity(queryHash, hash)
+})).sort((a, b) => a.distance - b.distance);
+
+// New approach: using orderBySimilarity (optimized)
+const ordered = PDQ.orderBySimilarity(queryHash, dbHashes);
+// Returns pre-sorted results with distance and similarity already calculated
 ```
 
 ## Troubleshooting
