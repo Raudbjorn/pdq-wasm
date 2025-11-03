@@ -41,6 +41,19 @@ export class PDQ {
   /**
    * Initialize the WASM module
    * Must be called before using any PDQ functions
+   *
+   * @param options Configuration options
+   * @param options.wasmUrl URL to load WASM module from (browser only)
+   *
+   * @example
+   * // Node.js (uses bundled WASM)
+   * await PDQ.init();
+   *
+   * @example
+   * // Browser with CDN
+   * await PDQ.init({
+   *   wasmUrl: 'https://unpkg.com/pdq-wasm@0.2.0/wasm/pdq.wasm'
+   * });
    */
   static async init(options: PDQOptions = {}): Promise<void> {
     if (this.initPromise) {
@@ -48,13 +61,67 @@ export class PDQ {
     }
 
     this.initPromise = (async () => {
-      if (!createPDQModuleFactory) {
-        throw new Error(
-          'PDQ WASM module not available. Make sure to run: npm run build:wasm'
-        );
-      }
+      // Browser environment with custom WASM URL
+      if (options.wasmUrl && typeof window !== 'undefined') {
+        try {
+          // Dynamically load the WASM module factory script
+          const wasmJsUrl = options.wasmUrl.replace(/\.wasm$/, '.js');
 
-      this.module = await createPDQModuleFactory(options);
+          // Security: Validate HTTPS URL to prevent insecure content
+          if (!/^https:\/\//.test(wasmJsUrl) && !/^http:\/\/localhost/.test(wasmJsUrl)) {
+            throw new Error(
+              `Insecure URL: ${wasmJsUrl}. Only HTTPS URLs are allowed for security (localhost HTTP is permitted for development).`
+            );
+          }
+
+          // Use script.src for better security and CSP compliance
+          const script = document.createElement('script');
+          script.src = wasmJsUrl;
+          script.async = false; // Ensure synchronous execution order
+
+          // Load script and wait for createPDQModule to be available
+          await new Promise<void>((resolve, reject) => {
+            script.onload = () => {
+              // Verify the factory function is available after load
+              if (typeof (window as any).createPDQModule === 'function') {
+                resolve();
+              } else {
+                reject(new Error('createPDQModule function not found after script load'));
+              }
+            };
+            script.onerror = () => reject(new Error(`Failed to load WASM module script from ${wasmJsUrl}`));
+            document.head.appendChild(script);
+          });
+
+          const factory = (window as any).createPDQModule;
+
+          // Initialize with the WASM URL
+          this.module = await factory({
+            locateFile: (path: string) => {
+              if (path.endsWith('.wasm')) {
+                return options.wasmUrl!;
+              }
+              return path;
+            }
+          });
+        } catch (error) {
+          throw new Error(
+            `Failed to load WASM module from ${options.wasmUrl}: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      } else {
+        // Node.js or browser without custom URL
+        if (!createPDQModuleFactory) {
+          throw new Error(
+            'PDQ WASM module not available. ' +
+            (typeof window !== 'undefined'
+              ? 'Provide wasmUrl option or bundle the WASM module.'
+              : 'Make sure to run: npm run build:wasm')
+          );
+        }
+
+        this.module = await createPDQModuleFactory(options);
+      }
     })();
 
     return this.initPromise;
