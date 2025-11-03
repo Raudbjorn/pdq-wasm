@@ -65,7 +65,6 @@ if(EMSCRIPTEN)
             -s ENVIRONMENT='web,node' \
             -s FILESYSTEM=0 \
             -s EXPORTED_FUNCTIONS='[\"_malloc\",\"_free\"]' \
-            -s STACK_SIZE=1MB \
             --no-entry \
             -O3"
     )
