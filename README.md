@@ -23,6 +23,12 @@ PDQ is a perceptual hashing algorithm developed by Meta (Facebook) for matching 
 npm install pdq-wasm
 ```
 
+The package is published on npm and includes:
+- WebAssembly binaries (~26KB)
+- TypeScript definitions
+- Browser and Node.js examples
+- Complete documentation
+
 ## Quick Start
 
 ### Node.js
@@ -408,15 +414,17 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 ## Changelog
 
-### 0.1.0 (Initial Release)
+### 0.1.0 (Initial Release) - Published to npm ✅
 - ✅ Core PDQ hashing functionality
 - ✅ Grayscale and RGB image support
 - ✅ Hamming distance calculation
 - ✅ Format conversion (hex ↔ bytes)
 - ✅ Similarity helpers
-- ✅ Comprehensive test suite
+- ✅ Comprehensive test suite (43 tests, 52,650 image comparisons)
 - ✅ TypeScript type definitions
-- ✅ Node.js support
+- ✅ Browser and Node.js support
+- ✅ Complete examples and documentation
+- ✅ Published on npm registry
 
 ## Support
 

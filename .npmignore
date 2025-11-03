@@ -14,14 +14,12 @@ build/
 # Development
 .git/
 .gitignore
-*.md
-!README.md
-!BUILDING.md
-!examples/README.md
 test-*.js
 
-# Keep examples for users
-!examples/
+# Documentation (exclude specific files, not patterns)
+FINAL_SUMMARY.md
+report.md
+PUBLISHING.md
 
 # CI/CD
 .github/
@@ -30,6 +28,4 @@ test-*.js
 
 # Tests
 coverage/
-
-# Keep wasm directory for distribution
-!wasm/
+__fixtures__/

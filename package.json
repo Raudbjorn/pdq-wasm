@@ -8,8 +8,10 @@
   "files": [
     "dist",
     "wasm",
+    "examples",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "BUILDING.md"
   ],
   "scripts": {
     "build:wasm": "bash scripts/build-wasm.sh",
