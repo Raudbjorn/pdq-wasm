@@ -33,12 +33,12 @@
   "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/svnbjrn/pdq-wasm.git"
+    "url": "git+https://github.com/Raudbjorn/pdq-wasm.git"
   },
   "bugs": {
-    "url": "https://github.com/svnbjrn/pdq-wasm/issues"
+    "url": "https://github.com/Raudbjorn/pdq-wasm/issues"
   },
-  "homepage": "https://github.com/svnbjrn/pdq-wasm#readme",
+  "homepage": "https://github.com/Raudbjorn/pdq-wasm#readme",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"

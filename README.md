@@ -1,6 +1,6 @@
 # PDQ WebAssembly
 
-[![CI](https://github.com/yourusername/pdq-wasm/workflows/CI/badge.svg)](https://github.com/yourusername/pdq-wasm/actions)
+[![CI](https://github.com/Raudbjorn/pdq-wasm/workflows/CI/badge.svg)](https://github.com/Raudbjorn/pdq-wasm/actions)
 [![npm version](https://badge.fury.io/js/pdq-wasm.svg)](https://www.npmjs.com/package/pdq-wasm)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
@@ -86,6 +86,63 @@ const imageData: ImageData = {
 const result = await hashImage(imageData);
 const hexHash: string = PDQ.toHex(result.hash);
 ```
+
+## Examples
+
+We provide comprehensive examples for both browser and Node.js environments:
+
+### Browser Example
+
+Interactive web application demonstrating PDQ hashing in the browser:
+
+```bash
+cd examples/browser
+npx serve .  # Or any static file server
+# Open http://localhost:3000 in your browser
+```
+
+**Features:**
+- Upload and hash images
+- Compare two images visually
+- Real-time similarity scores
+- Uses Canvas API for image processing
+
+### Node.js Examples
+
+#### Basic Usage
+
+```bash
+cd examples/nodejs
+node basic-usage.js
+```
+
+Demonstrates:
+- Initializing PDQ
+- Hashing synthetic images
+- Hamming distance calculation
+- Format conversion
+
+#### Image Comparison
+
+```bash
+npm install sharp  # Required for image loading
+node image-comparison.js image1.jpg image2.jpg image3.jpg
+```
+
+Demonstrates:
+- Loading real image files
+- Batch comparison of multiple images
+- Finding similar images
+
+### More Examples
+
+See the [examples/](./examples/) directory for:
+- Complete source code for all examples
+- API usage patterns
+- Common use cases (duplicate detection, content moderation)
+- Performance tips
+
+Full documentation: [examples/README.md](./examples/README.md)
 
 ## API Reference
 
@@ -262,62 +319,66 @@ These values depend on your use case. Experiment to find the right threshold.
 
 ## Building from Source
 
-### Prerequisites
-
-- Node.js 16+
-- Emscripten SDK (or install via package manager)
+### Quick Build
 
 ```bash
-# On Ubuntu/Debian
-sudo apt-get install emscripten
-
-# On macOS
-brew install emscripten
-
-# On Arch Linux
-sudo pacman -S emscripten
-```
-
-### Build Steps
-
-```bash
-git clone https://github.com/yourusername/pdq-wasm.git
+git clone https://github.com/Raudbjorn/pdq-wasm.git
 cd pdq-wasm
 
 # Install dependencies
 npm install
 
-# Build WASM module
-npm run build:wasm
-
-# Build TypeScript
-npm run build:ts
-
-# Or build everything
+# Build everything (WASM + TypeScript)
 npm run build
 
 # Run tests
 npm test
 ```
 
+### Prerequisites
+
+- **Node.js** 16+
+- **Emscripten** (for WASM compilation)
+- **CMake** 3.10+
+- **C++ Compiler** (C++11 support)
+
+### Detailed Build Instructions
+
+For comprehensive build instructions including:
+- Installing Emscripten, CMake, and all dependencies
+- Platform-specific setup (Linux, macOS, Windows/WSL)
+- Troubleshooting common build issues
+- Advanced build options and CI/CD setup
+
+See: [BUILDING.md](./BUILDING.md)
+
 ## Testing
 
 ```bash
-# Run test suite
+# Run full test suite
 npm test
+
+# Run specific tests
+npm test -- pdq.test.ts
+npm test -- image-similarity.test.ts
 
 # Run smoke test
 node test-basic.js
 ```
 
 Test coverage:
-- ✅ 30 unit tests
+- ✅ **43 tests total** (100% pass rate)
+- ✅ 30 unit tests covering all API functions
+- ✅ 13 pairwise image similarity tests
 - ✅ Initialization and error handling
 - ✅ Hash generation (grayscale and RGB)
 - ✅ Hamming distance calculation
-- ✅ Format conversion
-- ✅ Similarity helpers
-- ✅ Edge cases
+- ✅ Format conversion (hex ↔ bytes)
+- ✅ Similarity helpers and thresholds
+- ✅ Edge cases and validation
+- ✅ 324 test images (52,650 pairwise comparisons)
+- ✅ Shape-based similarity verification
+- ✅ Consistency and determinism tests
 
 ## Original Implementation
 
@@ -360,7 +421,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 ## Support
 
 For issues with this WebAssembly implementation:
-- **Issues**: https://github.com/yourusername/pdq-wasm/issues
+- **Issues**: https://github.com/Raudbjorn/pdq-wasm/issues
 
 For questions about the original PDQ algorithm:
 - **Contact**: threatexchange@meta.com

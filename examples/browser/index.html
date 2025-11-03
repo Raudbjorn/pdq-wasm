@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDQ WASM - Browser Example</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 900px;
+      margin: 50px auto;
+      padding: 0 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #007bff;
+      padding-bottom: 10px;
+    }
+    .container {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    .image-upload {
+      margin: 20px 0;
+    }
+    input[type="file"] {
+      margin: 10px 0;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 5px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .result {
+      background: white;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 15px 0;
+      border-left: 4px solid #007bff;
+    }
+    .hash {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      word-break: break-all;
+      background: #f4f4f4;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .preview {
+      max-width: 200px;
+      margin: 10px 0;
+      border-radius: 4px;
+      border: 2px solid #ddd;
+    }
+    .comparison {
+      background: #e7f3ff;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 15px 0;
+    }
+    .distance {
+      font-size: 24px;
+      font-weight: bold;
+      color: #007bff;
+    }
+    .similarity {
+      font-size: 18px;
+      color: #28a745;
+    }
+    code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>PDQ WASM - Browser Example</h1>
+
+  <div class="container">
+    <p>This example demonstrates how to use the PDQ perceptual hashing algorithm in the browser using WebAssembly.</p>
+    <p>Upload one or two images to generate their PDQ hashes and compare them.</p>
+  </div>
+
+  <div class="container">
+    <h2>Image 1</h2>
+    <div class="image-upload">
+      <input type="file" id="image1Input" accept="image/*">
+      <button id="hash1Btn" disabled>Generate Hash</button>
+    </div>
+    <div id="result1"></div>
+  </div>
+
+  <div class="container">
+    <h2>Image 2</h2>
+    <div class="image-upload">
+      <input type="file" id="image2Input" accept="image/*">
+      <button id="hash2Btn" disabled>Generate Hash</button>
+    </div>
+    <div id="result2"></div>
+  </div>
+
+  <div class="container">
+    <h2>Comparison</h2>
+    <button id="compareBtn" disabled>Compare Images</button>
+    <div id="comparisonResult"></div>
+  </div>
+
+  <div class="container">
+    <h2>How it works</h2>
+    <ol>
+      <li>The PDQ WASM module is loaded automatically when the page loads</li>
+      <li>When you upload an image, it's decoded using the Canvas API</li>
+      <li>The raw pixel data is passed to the PDQ algorithm</li>
+      <li>A 256-bit perceptual hash is generated</li>
+      <li>Two hashes can be compared using Hamming distance</li>
+    </ol>
+    <p><strong>Hamming Distance:</strong> The number of bits that differ between two hashes (0-256). Lower values indicate more similar images.</p>
+    <p><strong>Similarity:</strong> Percentage similarity based on the Hamming distance (100% - (distance/256 * 100)).</p>
+  </div>
+
+  <!-- Using unpkg.com CDN for demonstration -->
+  <script type="module">
+    // For production, you would typically bundle this with your build system
+    // This example uses a local build - adjust the path as needed
+
+    // In a real deployment, you'd import from CDN or your bundled version:
+    // import { PDQ } from 'https://unpkg.com/pdq-wasm@latest/dist/index.mjs';
+
+    // For this example, we'll load from the local build
+    // You may need to serve this with a local server due to CORS restrictions
+    import { PDQ } from '../../dist/index.js';
+
+    let hash1 = null;
+    let hash2 = null;
+
+    // Initialize PDQ
+    console.log('Initializing PDQ WASM module...');
+    await PDQ.init();
+    console.log('PDQ WASM module initialized');
+
+    const image1Input = document.getElementById('image1Input');
+    const image2Input = document.getElementById('image2Input');
+    const hash1Btn = document.getElementById('hash1Btn');
+    const hash2Btn = document.getElementById('hash2Btn');
+    const compareBtn = document.getElementById('compareBtn');
+    const result1 = document.getElementById('result1');
+    const result2 = document.getElementById('result2');
+    const comparisonResult = document.getElementById('comparisonResult');
+
+    // Enable buttons when files are selected
+    image1Input.addEventListener('change', () => {
+      hash1Btn.disabled = !image1Input.files[0];
+    });
+
+    image2Input.addEventListener('change', () => {
+      hash2Btn.disabled = !image2Input.files[0];
+    });
+
+    // Hash image 1
+    hash1Btn.addEventListener('click', async () => {
+      const file = image1Input.files[0];
+      if (!file) return;
+
+      try {
+        hash1 = await hashImage(file);
+        displayResult(result1, hash1, file);
+        updateCompareButton();
+      } catch (err) {
+        result1.innerHTML = `<div class="result" style="border-left-color: #dc3545;">Error: ${err.message}</div>`;
+      }
+    });
+
+    // Hash image 2
+    hash2Btn.addEventListener('click', async () => {
+      const file = image2Input.files[0];
+      if (!file) return;
+
+      try {
+        hash2 = await hashImage(file);
+        displayResult(result2, hash2, file);
+        updateCompareButton();
+      } catch (err) {
+        result2.innerHTML = `<div class="result" style="border-left-color: #dc3545;">Error: ${err.message}</div>`;
+      }
+    });
+
+    // Compare hashes
+    compareBtn.addEventListener('click', () => {
+      if (!hash1 || !hash2) return;
+
+      const distance = PDQ.hammingDistance(hash1.hash, hash2.hash);
+      const similarity = PDQ.similarity(hash1.hash, hash2.hash);
+      const isSimilar = PDQ.isSimilar(hash1.hash, hash2.hash); // Uses default threshold of 31
+
+      comparisonResult.innerHTML = `
+        <div class="comparison">
+          <h3>Comparison Results</h3>
+          <p><strong>Hamming Distance:</strong> <span class="distance">${distance}</span> / 256</p>
+          <p><strong>Similarity:</strong> <span class="similarity">${similarity.toFixed(2)}%</span></p>
+          <p><strong>Are they similar?</strong> ${isSimilar ? '✅ Yes (distance ≤ 31)' : '❌ No (distance > 31)'}</p>
+          <p><small>PDQ uses a recommended threshold of 31 bits difference for determining duplicates.</small></p>
+        </div>
+      `;
+    });
+
+    function updateCompareButton() {
+      compareBtn.disabled = !(hash1 && hash2);
+    }
+
+    async function hashImage(file) {
+      // Create an image element
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+
+      return new Promise((resolve, reject) => {
+        img.onload = () => {
+          try {
+            // Create canvas and get image data
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+
+            const imageData = ctx.getImageData(0, 0, img.width, img.height);
+
+            // Extract RGB data (PDQ expects RGB or grayscale)
+            const rgbData = new Uint8Array(img.width * img.height * 3);
+            let rgbIndex = 0;
+            for (let i = 0; i < imageData.data.length; i += 4) {
+              rgbData[rgbIndex++] = imageData.data[i];     // R
+              rgbData[rgbIndex++] = imageData.data[i + 1]; // G
+              rgbData[rgbIndex++] = imageData.data[i + 2]; // B
+              // Skip alpha channel (imageData.data[i + 3])
+            }
+
+            // Generate PDQ hash
+            const result = PDQ.hash({
+              data: rgbData,
+              width: img.width,
+              height: img.height,
+              channels: 3
+            });
+
+            URL.revokeObjectURL(url);
+            resolve({
+              hash: result.hash,
+              quality: result.quality,
+              hex: PDQ.toHex(result.hash),
+              width: img.width,
+              height: img.height,
+              url: URL.createObjectURL(file)
+            });
+          } catch (err) {
+            URL.revokeObjectURL(url);
+            reject(err);
+          }
+        };
+
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('Failed to load image'));
+        };
+
+        img.src = url;
+      });
+    }
+
+    function displayResult(element, result, file) {
+      element.innerHTML = `
+        <div class="result">
+          <img src="${result.url}" class="preview" alt="Preview">
+          <p><strong>Dimensions:</strong> ${result.width} x ${result.height}</p>
+          <p><strong>Quality:</strong> ${result.quality}</p>
+          <p><strong>Hash (hex):</strong></p>
+          <div class="hash">${result.hex}</div>
+          <p><strong>Hash (first 8 bytes):</strong></p>
+          <div class="hash">${Array.from(result.hash.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ')}</div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

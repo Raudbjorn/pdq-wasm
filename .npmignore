@@ -16,7 +16,12 @@ build/
 .gitignore
 *.md
 !README.md
+!BUILDING.md
+!examples/README.md
 test-*.js
+
+# Keep examples for users
+!examples/
 
 # CI/CD
 .github/
