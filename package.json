@@ -2,9 +2,17 @@
   "name": "pdq-wasm",
   "version": "0.3.1",
   "description": "WebAssembly bindings for Meta's PDQ perceptual image hashing algorithm",
+  "type": "commonjs",
   "main": "dist/index.js",
-  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "wasm",
