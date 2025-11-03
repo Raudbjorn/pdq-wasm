@@ -293,7 +293,7 @@ export class PDQ {
     // Calculate distance and similarity for each hash
     const matches: SimilarityMatch[] = hashes.map((hash, index) => {
       if (hash.length !== 32) {
-        throw new Error(`Invalid hash length at index ${index}. PDQ hashes must be 32 bytes.`);
+        throw new Error(`Invalid hash length at index ${index}. Expected 32 bytes, got ${hash.length}.`);
       }
 
       const distance = this.hammingDistance(referenceHash, hash);
