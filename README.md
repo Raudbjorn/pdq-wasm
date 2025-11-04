@@ -26,6 +26,8 @@ npm install pdq-wasm
 The package is published on npm and includes:
 - WebAssembly binaries (~26KB)
 - TypeScript definitions
+- **Dual module system** (CommonJS + ES Modules)
+- **Browser utilities** for duplicate detection
 - Browser and Node.js examples
 - Complete documentation
 
@@ -148,6 +150,71 @@ For production use with a custom domain, you can:
 1. Set up GitHub Pages to serve the WASM files
 2. Configure a CNAME for your domain
 3. Load from your custom domain: `https://cdn.yourdomain.com/pdq.wasm`
+
+### Browser (ES Modules - Local Development)
+
+For local development or bundled applications, you can use ES modules directly:
+
+```html
+<script type="module">
+  import { PDQ } from './node_modules/pdq-wasm/dist/esm/index.js';
+
+  // Initialize with relative WASM URL
+  await PDQ.init({
+    wasmUrl: './node_modules/pdq-wasm/wasm/pdq.wasm'
+  });
+
+  // Use PDQ normally
+  const result = PDQ.hash(imageData);
+</script>
+```
+
+**With bundlers (Vite, Webpack, Rollup):**
+
+```javascript
+import { PDQ } from 'pdq-wasm';
+
+// The bundler will automatically resolve the ES module
+await PDQ.init({
+  wasmUrl: '/wasm/pdq.wasm'  // Copy wasm file to public directory
+});
+```
+
+**Package exports both CommonJS and ES Modules:**
+- ES Module: `pdq-wasm/dist/esm/index.js` (for browsers and modern Node.js)
+- CommonJS: `pdq-wasm/dist/index.js` (for traditional Node.js)
+
+The package.json `exports` field automatically selects the right version based on your environment.
+
+## Browser Utilities
+
+PDQ-WASM includes specialized browser utilities for common web application tasks. For complete documentation on browser utilities including duplicate detection, hash checking, and progress tracking:
+
+**📖 See: [docs/BROWSER.md](./docs/BROWSER.md)**
+
+Quick overview of available utilities:
+
+```javascript
+import {
+  createHashChecker,      // Hash existence checking with caching
+  hammingDistance,        // Hex hash comparison
+  generateHashFromDataUrl, // Hash from data/blob URLs
+  detectDuplicatesByHash  // Batch duplicate detection
+} from 'pdq-wasm/browser';
+```
+
+**Key Features:**
+- **createHashChecker**: Chainable hash lookup with `.cached()` and `.ignoreInvalid()`
+- **generateHashFromDataUrl**: Canvas-based image hashing (remember to revoke blob URLs!)
+- **detectDuplicatesByHash**: Batch duplicate detection with progress callbacks
+- **hammingDistance**: Convenient hex string comparison
+
+**Use Cases:**
+- File upload deduplication
+- Photo gallery management
+- Content moderation
+- Offline-first apps with cached lookups
+- Real-time duplicate detection with progress UI
 
 **Security Note:** As a best practice, only load WASM modules from trusted sources. The `wasmUrl` option dynamically loads and executes WebAssembly code in your application. Always verify that the URL points to a trusted CDN or your own infrastructure. For production applications, consider:
 - Using Subresource Integrity (SRI) hashes when supported
@@ -348,6 +415,113 @@ console.log('Original index:', withIndices[0].index);
 - Deduplicate image collections
 - Build image recommendation systems
 
+### Logging and Error Handling
+
+#### `PDQ.setLogger(logger): typeof PDQ`
+
+Set a custom logger function to log PDQ operations.
+
+**Parameters:**
+- `logger`: `(message: string) => void` - Function that receives log messages
+
+**Returns:** `PDQ` class for method chaining
+
+**Example:**
+```javascript
+PDQ.setLogger((msg) => console.log('[PDQ]', msg));
+await PDQ.init();  // Logs: "[PDQ] Initializing PDQ WASM module..."
+```
+
+#### `PDQ.consoleLog(): typeof PDQ`
+
+Enable console logging (convenience method).
+
+**Returns:** `PDQ` class for method chaining
+
+**Example:**
+```javascript
+PDQ.consoleLog();  // Equivalent to PDQ.setLogger(console.log)
+await PDQ.init();
+const result = PDQ.hash(imageData);
+// Logs all operations to console
+```
+
+#### `PDQ.disableLogging(): typeof PDQ`
+
+Disable logging.
+
+**Returns:** `PDQ` class for method chaining
+
+**Example:**
+```javascript
+PDQ.disableLogging();
+```
+
+#### `PDQ.ignoreInvalid(): typeof PDQ`
+
+Enable ignore invalid mode - log errors instead of throwing exceptions. When enabled, validation errors will be logged but methods will return safe default values instead of throwing:
+
+- `hash()`: Returns zero hash with quality 0
+- `hammingDistance()`: Returns maximum distance (256)
+- `toHex()`: Returns zero hash string
+- `fromHex()`: Returns zero hash bytes
+- `orderBySimilarity()`: Returns empty array or filters out invalid hashes
+
+**Returns:** `PDQ` class for method chaining
+
+**Example:**
+```javascript
+PDQ.ignoreInvalid().consoleLog();
+
+// Invalid input will be logged but won't throw
+const result = PDQ.hash({
+  data: new Uint8Array(10),  // Too small
+  width: 100,
+  height: 100,
+  channels: 3
+});
+// Logs: "ERROR: Invalid image data size..."
+// Returns: { hash: Uint8Array(32), quality: 0 }
+```
+
+#### `PDQ.throwOnInvalid(): typeof PDQ`
+
+Disable ignore invalid mode - throw errors normally (default behavior).
+
+**Returns:** `PDQ` class for method chaining
+
+**Example:**
+```javascript
+PDQ.throwOnInvalid();  // Back to normal error throwing
+```
+
+**Use Cases for Logging:**
+- **Debugging**: Enable console logging to trace PDQ operations
+- **Production Monitoring**: Send logs to your logging service
+- **Error Handling**: Use ignoreInvalid() for graceful degradation in batch processing
+- **Development**: Understand what's happening during hash generation
+
+**Logging Example with Custom Service:**
+```javascript
+// Send logs to your logging service
+PDQ.setLogger((msg) => {
+  if (msg.startsWith('ERROR:')) {
+    myLogger.error('PDQ', msg);
+  } else {
+    myLogger.info('PDQ', msg);
+  }
+});
+
+// Chain configuration
+await PDQ
+  .ignoreInvalid()  // Don't throw on validation errors
+  .setLogger(myLogger.log)  // Log all operations
+  .init();
+
+// Now all operations are logged and validation errors won't crash
+const results = images.map(img => PDQ.hash(img));
+```
+
 ### Format Conversion
 
 #### `PDQ.toHex(hash): string`
@@ -545,12 +719,14 @@ For comprehensive build instructions including:
 - Troubleshooting common build issues
 - Advanced build options and CI/CD setup
 
-See: [BUILDING.md](./BUILDING.md)
+See: [docs/BUILDING.md](./docs/BUILDING.md)
 
 ## Testing
 
+### Unit Tests
+
 ```bash
-# Run full test suite
+# Run full unit test suite
 npm test
 
 # Run specific tests
@@ -574,6 +750,50 @@ Test coverage:
 - ✅ 324 test images (52,650 pairwise comparisons)
 - ✅ Shape-based similarity verification
 - ✅ Consistency and determinism tests
+
+### End-to-End (E2E) Tests
+
+The project includes Playwright E2E tests that verify PDQ duplicate detection in a real browser environment using Uppy file uploads:
+
+```bash
+# Run all E2E tests
+npm run test:e2e
+
+# Run E2E tests with UI
+npm run test:e2e:ui
+
+# Run E2E tests in debug mode
+npm run test:e2e:debug
+
+# Run both unit and E2E tests
+npm run test:all
+```
+
+**E2E Test Scenarios:**
+- ✅ PDQ initialization in browser
+- ✅ Same file uploaded twice (duplicate detection)
+- ✅ Different files (no false positives)
+- ✅ Renamed copy detection (same content, different filename)
+- ✅ Mixed scenario (duplicates + unique files)
+- ✅ File removal and UI updates
+- ✅ Hash generation and validation
+
+**Test Fixtures:**
+The E2E tests use generated test images with distinct shapes:
+- `red-circle.png` - Red circle on white background
+- `blue-square.png` - Blue square on white background
+- `green-triangle.png` - Green triangle on white background
+- `red-circle-copy.png` - Identical copy for duplicate testing
+
+**E2E Test Webapp:**
+The test webapp (`__tests__/e2e/webapp/index.html`) demonstrates:
+- Uppy file upload dashboard integration
+- Real-time PDQ hash generation using Canvas API
+- Duplicate detection with Hamming distance threshold
+- UI updates showing duplicate groups
+- File statistics (total files, duplicates found, unique files)
+
+This provides a complete reference implementation for integrating PDQ duplicate detection in web applications.
 
 ## Original Implementation
 
@@ -599,7 +819,7 @@ Contributions are welcome! Please:
 - Update documentation as needed
 - Ensure all tests pass
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) for details.
 
 ## Changelog
 

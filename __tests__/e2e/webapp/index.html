@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDQ Duplicate Detection - Uppy Demo</title>
+
+  <!-- Uppy CSS -->
+  <link href="https://releases.transloadit.com/uppy/v3.21.0/uppy.min.css" rel="stylesheet">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      margin-bottom: 30px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .status {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+
+    .status h2 {
+      font-size: 16px;
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .status-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .status-item:last-child {
+      border-bottom: none;
+    }
+
+    .status-label {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .status-value {
+      font-weight: 600;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .status-value.processing {
+      color: #2196F3;
+    }
+
+    .status-value.duplicate {
+      color: #f44336;
+    }
+
+    .status-value.unique {
+      color: #4CAF50;
+    }
+
+    #uppy-container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .duplicates-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      margin-top: 20px;
+      display: none;
+    }
+
+    .duplicates-section.has-duplicates {
+      display: block;
+    }
+
+    .duplicates-section h2 {
+      color: #f44336;
+      font-size: 18px;
+      margin-bottom: 15px;
+    }
+
+    .duplicate-group {
+      background: #fff5f5;
+      border: 2px solid #f44336;
+      border-radius: 6px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+
+    .duplicate-group h3 {
+      font-size: 14px;
+      color: #f44336;
+      margin-bottom: 10px;
+    }
+
+    .duplicate-file {
+      padding: 8px 0;
+      border-bottom: 1px solid #ffcdd2;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .duplicate-file:last-child {
+      border-bottom: none;
+    }
+
+    .duplicate-file strong {
+      color: #333;
+    }
+
+    .test-info {
+      background: #e3f2fd;
+      border: 1px solid #2196F3;
+      border-radius: 6px;
+      padding: 15px;
+      margin-top: 20px;
+      font-size: 13px;
+      color: #1976D2;
+    }
+
+    .test-info code {
+      background: #bbdefb;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>PDQ Duplicate Detection Demo</h1>
+      <p class="subtitle">Upload images and automatically detect duplicates using perceptual hashing</p>
+    </header>
+
+    <div class="status">
+      <h2>Upload Status</h2>
+      <div class="status-item">
+        <span class="status-label">Total Files:</span>
+        <span class="status-value" id="total-files">0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Processing:</span>
+        <span class="status-value processing" id="processing-status">Ready</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Duplicates Found:</span>
+        <span class="status-value duplicate" id="duplicates-count">0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Unique Files:</span>
+        <span class="status-value unique" id="unique-count">0</span>
+      </div>
+    </div>
+
+    <div id="uppy-container"></div>
+
+    <div class="duplicates-section" id="duplicates-section">
+      <h2>⚠️ Duplicate Images Detected</h2>
+      <div id="duplicate-groups"></div>
+    </div>
+
+    <div class="test-info">
+      <strong>For E2E Testing:</strong> This page uses PDQ perceptual hashing to detect duplicate images.
+      Files are analyzed client-side using <code>pdq-wasm</code>. Duplicate groups are displayed below.
+    </div>
+  </div>
+
+  <!-- Uppy JavaScript -->
+  <script src="https://releases.transloadit.com/uppy/v3.21.0/uppy.min.js"></script>
+
+  <!-- PDQ WASM Library -->
+  <script type="module">
+    import { PDQ, generateHashFromDataUrl, detectDuplicatesByHash } from '../../../dist/esm/index.js';
+
+    // Initialize PDQ with WASM file path
+    await PDQ.init({
+      wasmUrl: '../../../wasm/pdq.wasm'
+    });
+    console.log('PDQ initialized successfully');
+
+    // Expose PDQ to window for E2E tests
+    window.PDQ = PDQ;
+
+    // Track all uploaded files with metadata
+    const uploadedFiles = new Map();
+    let fileCounter = 0;
+
+    // Initialize Uppy
+    const uppy = new Uppy.Uppy({
+      id: 'uppy',
+      autoProceed: false,
+      allowMultipleUploadBatches: true,
+      restrictions: {
+        maxFileSize: 10 * 1024 * 1024, // 10MB
+        allowedFileTypes: ['image/*']
+      }
+    })
+    .use(Uppy.Dashboard, {
+      target: '#uppy-container',
+      inline: true,
+      height: 400,
+      proudlyDisplayPoweredByUppy: false,
+      note: 'Images only, up to 10MB. Duplicates will be detected automatically.',
+      showProgressDetails: true
+    })
+    .use(Uppy.ImageEditor, {
+      target: Uppy.Dashboard
+    });
+
+    // Listen for file additions
+    uppy.on('file-added', async (file) => {
+      fileCounter++;
+      console.log('File added:', file.name);
+
+      // Update total files count
+      document.getElementById('total-files').textContent = uppy.getFiles().length;
+      document.getElementById('processing-status').textContent = 'Hashing...';
+
+      try {
+        // Generate PDQ hash for the file
+        const dataUrl = URL.createObjectURL(file.data);
+        try {
+          const hash = await generateHashFromDataUrl(dataUrl);
+
+          // Store file with hash
+          uploadedFiles.set(file.id, {
+            id: file.id,
+            name: file.name,
+            preview: dataUrl,
+            type: file.type,
+            meta: {
+              hash,
+              uploadOrder: fileCounter
+            }
+          });
+
+          console.log(`Generated hash for ${file.name}:`, hash);
+
+          // Check for duplicates whenever a new file is added
+          await checkDuplicates();
+        } finally {
+          // Don't revoke yet - we need it for duplicate detection
+        }
+      } catch (error) {
+        console.error('Error hashing file:', error);
+        uploadedFiles.set(file.id, {
+          id: file.id,
+          name: file.name,
+          preview: '',
+          type: file.type,
+          meta: {
+            hashError: error.message
+          }
+        });
+      }
+
+      document.getElementById('processing-status').textContent = 'Ready';
+    });
+
+    // Listen for file removals
+    uppy.on('file-removed', (file) => {
+      const fileData = uploadedFiles.get(file.id);
+      if (fileData?.preview) {
+        URL.revokeObjectURL(fileData.preview);
+      }
+      uploadedFiles.delete(file.id);
+
+      document.getElementById('total-files').textContent = uppy.getFiles().length;
+      checkDuplicates();
+    });
+
+    // Duplicate detection function
+    async function checkDuplicates() {
+      const files = Array.from(uploadedFiles.values());
+
+      if (files.length < 2) {
+        document.getElementById('duplicates-count').textContent = '0';
+        document.getElementById('unique-count').textContent = files.length;
+        document.getElementById('duplicates-section').classList.remove('has-duplicates');
+        return;
+      }
+
+      try {
+        const duplicateGroups = await detectDuplicatesByHash(files, 31);
+
+        const totalDuplicates = duplicateGroups.reduce((sum, group) => sum + group.length, 0);
+        const uniqueFiles = files.length - totalDuplicates;
+
+        document.getElementById('duplicates-count').textContent = totalDuplicates;
+        document.getElementById('unique-count').textContent = uniqueFiles;
+
+        // Display duplicate groups
+        const duplicatesSection = document.getElementById('duplicates-section');
+        const duplicateGroupsContainer = document.getElementById('duplicate-groups');
+
+        if (duplicateGroups.length > 0) {
+          duplicatesSection.classList.add('has-duplicates');
+
+          duplicateGroupsContainer.innerHTML = duplicateGroups.map((group, index) => {
+            const filesList = group.map(file =>
+              `<div class="duplicate-file">
+                <strong>${file.name}</strong>
+                ${file.meta?.hash ? `(Hash: ${file.meta.hash.substring(0, 16)}...)` : ''}
+              </div>`
+            ).join('');
+
+            return `
+              <div class="duplicate-group" data-testid="duplicate-group-${index}">
+                <h3>Duplicate Group ${index + 1} (${group.length} files)</h3>
+                ${filesList}
+              </div>
+            `;
+          }).join('');
+        } else {
+          duplicatesSection.classList.remove('has-duplicates');
+          duplicateGroupsContainer.innerHTML = '';
+        }
+
+        console.log('Duplicate detection complete:', {
+          totalFiles: files.length,
+          duplicateGroups: duplicateGroups.length,
+          totalDuplicates,
+          uniqueFiles
+        });
+      } catch (error) {
+        console.error('Error detecting duplicates:', error);
+      }
+    }
+
+    // Make uppy available globally for testing
+    window.uppy = uppy;
+    window.uploadedFiles = uploadedFiles;
+    window.checkDuplicates = checkDuplicates;
+    window.PDQ = PDQ;
+
+    console.log('Uppy initialized and ready');
+  </script>
+</body>
+</html>
