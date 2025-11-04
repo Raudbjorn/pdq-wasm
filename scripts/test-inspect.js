@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const createPDQModule = require('./dist/pdq.js');
+const createPDQModule = require('../dist/pdq.js');
 
 async function inspect() {
   const Module = await createPDQModule();

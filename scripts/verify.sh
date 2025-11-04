@@ -22,7 +22,7 @@ echo ""
 # Check package.json
 echo "Checking package.json..."
 node -e "
-const pkg = require('./package.json');
+const pkg = require('../package.json');
 console.log('✓ Package name:', pkg.name);
 console.log('✓ Version:', pkg.version);
 console.log('✓ License:', pkg.license);
@@ -38,7 +38,7 @@ echo ""
 
 # Run smoke test
 echo "Running smoke test..."
-node test-basic.js > /dev/null 2>&1 && echo "✓ Smoke test passed"
+node scripts/test-basic.js > /dev/null 2>&1 && echo "✓ Smoke test passed"
 echo ""
 
 # Check file sizes

@@ -39,11 +39,11 @@ jobs:
     - name: Build TypeScript
       run: npm run build:ts
 
-#    - name: Run tests
-#      run: npm test
+    - name: Run tests
+      run: npm test
 
-#    - name: Run smoke test
-#      run: node test-basic.js
+    - name: Run smoke test
+      run: node scripts/test-basic.js
 
     - name: Check build artifacts
       run: |

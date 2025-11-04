@@ -310,6 +310,9 @@
       checkDuplicates();
     });
 
+    // Expose Uppy instance globally for E2E tests
+    window.uppy = uppy;
+
     // Duplicate detection function
     async function checkDuplicates() {
       const files = Array.from(uploadedFiles.values());

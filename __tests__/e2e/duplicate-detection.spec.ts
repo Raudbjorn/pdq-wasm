@@ -14,26 +14,57 @@ import * as path from 'path';
 const WEBAPP_URL = '/__tests__/e2e/webapp/index.html';
 const FIXTURES_DIR = path.resolve(__dirname, 'fixtures');
 
-// Helper to upload a file (handles "+ Add more" button)
+// Counter for generating unique filenames
+let uploadCounter = 0;
+
+// Helper to upload a file - uses Uppy's programmatic API to bypass UI issues
 async function uploadFile(page: any, filePath: string) {
-  // Check if "+ Add more" button is visible (appears after first upload)
-  const addMoreButton = page.locator('text="+ Add more"');
-  const isVisible = await addMoreButton.isVisible().catch(() => false);
+  // Read the file from disk
+  const fs = require('fs');
+  const pathModule = require('path');
+  const originalFileName = pathModule.basename(filePath);
+  const fileBuffer = fs.readFileSync(filePath);
+  const fileData = fileBuffer.toString('base64');
+  const mimeType = filePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
 
-  if (isVisible) {
-    await addMoreButton.click();
-    // Wait for the file input to be ready after clicking
-    await page.waitForTimeout(500);
-  }
+  // Generate unique filename to bypass Uppy's duplicate name check
+  // while keeping the same file content for duplicate detection testing
+  uploadCounter++;
+  const ext = pathModule.extname(originalFileName);
+  const nameWithoutExt = pathModule.basename(originalFileName, ext);
+  const uniqueFileName = `${nameWithoutExt}-${uploadCounter}${ext}`;
 
-  // Get fresh file input locator and upload
-  const fileInput = page.locator('.uppy-Dashboard-input').first();
-  await fileInput.waitFor({ state: 'attached', timeout: 5000 });
-  await fileInput.setInputFiles(filePath);
+  // Use Uppy's addFile API directly via page.evaluate
+  await page.evaluate(({ fileName, fileData, mimeType }) => {
+    // Convert base64 back to Blob
+    const byteCharacters = atob(fileData);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: mimeType });
+
+    // Access the global Uppy instance and add the file
+    const uppy = (window as any).uppy;
+    if (uppy) {
+      uppy.addFile({
+        name: fileName,
+        type: mimeType,
+        data: blob
+      });
+    }
+  }, { fileName: uniqueFileName, fileData, mimeType });
+
+  // Give Uppy time to process the file addition
+  await page.waitForTimeout(1000);
 }
 
 test.describe('PDQ Duplicate Detection E2E', () => {
   test.beforeEach(async ({ page }) => {
+    // Reset upload counter for each test
+    uploadCounter = 0;
+
     // Capture console logs and errors
     page.on('console', msg => console.log(`[Browser ${msg.type()}]:`, msg.text()));
     page.on('pageerror', err => console.error('[Browser Error]:', err.message));
@@ -167,10 +198,10 @@ test.describe('PDQ Duplicate Detection E2E', () => {
     // Check duplicate section is visible
     await expect(page.locator('#duplicates-section')).toHaveClass(/has-duplicates/);
 
-    // Verify both filenames are in duplicate group
+    // Verify both filenames are in duplicate group (with counter suffixes)
     const duplicateGroup = page.locator('[data-testid="duplicate-group-0"]');
-    await expect(duplicateGroup).toContainText('red-circle.png');
-    await expect(duplicateGroup).toContainText('red-circle-copy.png');
+    await expect(duplicateGroup).toContainText('red-circle-1.png');
+    await expect(duplicateGroup).toContainText('red-circle-copy-2.png');
   });
 
   test('should handle mixed scenario: duplicates + unique files', async ({ page }) => {
