@@ -55,11 +55,18 @@ export interface PDQWasmModule {
 }
 
 /**
+ * Logger function type
+ */
+export type LoggerFunction = (message: string) => void;
+
+/**
  * PDQ configuration options
  */
 export interface PDQOptions {
   /** Custom WASM module URL (for browser environments) */
   wasmUrl?: string;
+  /** Logger function to log PDQ operations (optional) */
+  logger?: LoggerFunction;
 }
 
 /**

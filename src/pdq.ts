@@ -12,23 +12,33 @@ import type {
   PDQWasmModule,
   PDQOptions,
   SimilarityMatch,
+  LoggerFunction,
 } from './types';
 
 // Import the WASM module factory
 // This will be resolved differently in Node.js vs browser
-let createPDQModuleFactory: any;
+let createPDQModuleFactory: any = null;
 
-if (typeof process !== 'undefined' && process.versions?.node) {
-  // Node.js environment
-  try {
-    createPDQModuleFactory = require('../wasm/pdq.js');
-  } catch (e) {
-    // WASM module not built yet
-    createPDQModuleFactory = null;
+// Lazy loader for Node.js environment - deferred to avoid require() in ES modules
+function getWasmFactory(): any {
+  if (createPDQModuleFactory !== null) {
+    return createPDQModuleFactory;
   }
-} else {
-  // Browser environment - will need to be provided via options
-  createPDQModuleFactory = null;
+
+  // Check if we're in Node.js AND require is available (CommonJS or Node.js ESM with require)
+  if (typeof process !== 'undefined' && process.versions?.node && typeof require !== 'undefined') {
+    // Node.js environment with require available
+    try {
+      createPDQModuleFactory = require('../wasm/pdq.js');
+      return createPDQModuleFactory;
+    } catch (e) {
+      // WASM module not built yet
+      return null;
+    }
+  }
+
+  // Browser environment or Node.js ESM without require - will need to be provided via options
+  return null;
 }
 
 /**
@@ -37,6 +47,82 @@ if (typeof process !== 'undefined' && process.versions?.node) {
 export class PDQ {
   private static module: PDQWasmModule | null = null;
   private static initPromise: Promise<void> | null = null;
+  private static loggerFn: LoggerFunction | null = null;
+  private static ignoreInvalidFlag: boolean = false;
+
+  /**
+   * Set a custom logger function to log PDQ operations
+   * @param logger Function that receives log messages
+   * @returns PDQ class for method chaining
+   *
+   * @example
+   * PDQ.logger((msg) => console.log('[PDQ]', msg));
+   */
+  static setLogger(logger: LoggerFunction): typeof PDQ {
+    this.loggerFn = logger;
+    return this;
+  }
+
+  /**
+   * Enable console logging (convenience method)
+   * @returns PDQ class for method chaining
+   *
+   * @example
+   * PDQ.consoleLog();
+   */
+  static consoleLog(): typeof PDQ {
+    return this.setLogger(console.log);
+  }
+
+  /**
+   * Disable logging
+   * @returns PDQ class for method chaining
+   */
+  static disableLogging(): typeof PDQ {
+    this.loggerFn = null;
+    return this;
+  }
+
+  /**
+   * Enable ignore invalid mode - log errors instead of throwing
+   * @returns PDQ class for method chaining
+   *
+   * @example
+   * PDQ.ignoreInvalid().consoleLog();
+   */
+  static ignoreInvalid(): typeof PDQ {
+    this.ignoreInvalidFlag = true;
+    return this;
+  }
+
+  /**
+   * Disable ignore invalid mode - throw errors normally
+   * @returns PDQ class for method chaining
+   */
+  static throwOnInvalid(): typeof PDQ {
+    this.ignoreInvalidFlag = false;
+    return this;
+  }
+
+  /**
+   * Internal logging method
+   */
+  private static log(message: string): void {
+    if (this.loggerFn) {
+      this.loggerFn(message);
+    }
+  }
+
+  /**
+   * Internal error handling method
+   * Either throws or logs based on ignoreInvalidFlag
+   */
+  private static handleError(errorMsg: string): void {
+    this.log(`ERROR: ${errorMsg}`);
+    if (!this.ignoreInvalidFlag) {
+      throw new Error(errorMsg);
+    }
+  }
 
   /**
    * Initialize the WASM module
@@ -61,16 +147,24 @@ export class PDQ {
     }
 
     this.initPromise = (async () => {
+      this.log('Initializing PDQ WASM module...');
+
       // Browser environment with custom WASM URL
       if (options.wasmUrl && typeof window !== 'undefined') {
+        this.log(`Loading WASM module from: ${options.wasmUrl}`);
         try {
           // Dynamically load the WASM module factory script
           const wasmJsUrl = options.wasmUrl.replace(/\.wasm$/, '.js');
 
-          // Security: Validate HTTPS URL to prevent insecure content
-          if (!/^https:\/\//.test(wasmJsUrl) && !/^http:\/\/localhost/.test(wasmJsUrl)) {
+          // Security: Validate URL to prevent insecure content
+          // Allow: HTTPS, localhost HTTP, relative URLs (for local development)
+          const isHttps = /^https:\/\//.test(wasmJsUrl);
+          const isLocalhost = /^http:\/\/localhost(:\d+)?/.test(wasmJsUrl) || /^http:\/\/127\.0\.0\.1(:\d+)?/.test(wasmJsUrl);
+          const isRelative = /^\.\.?\//.test(wasmJsUrl) || !/:\/\//.test(wasmJsUrl);
+
+          if (!isHttps && !isLocalhost && !isRelative) {
             throw new Error(
-              `Insecure URL: ${wasmJsUrl}. Only HTTPS URLs are allowed for security (localhost HTTP is permitted for development).`
+              `Insecure URL: ${wasmJsUrl}. Only HTTPS URLs are allowed for security (localhost HTTP and relative URLs are permitted for development).`
             );
           }
 
@@ -104,23 +198,27 @@ export class PDQ {
               return path;
             }
           });
+          this.log('PDQ WASM module initialized successfully (browser)');
         } catch (error) {
-          throw new Error(
-            `Failed to load WASM module from ${options.wasmUrl}: ${error instanceof Error ? error.message : String(error)}`
-          );
+          const errorMsg = `Failed to load WASM module from ${options.wasmUrl}: ${error instanceof Error ? error.message : String(error)}`;
+          this.log(`ERROR: ${errorMsg}`);
+          throw new Error(errorMsg);
         }
       } else {
         // Node.js or browser without custom URL
-        if (!createPDQModuleFactory) {
-          throw new Error(
-            'PDQ WASM module not available. ' +
+        this.log('Loading WASM module (Node.js)...');
+        const factory = getWasmFactory();
+        if (!factory) {
+          const errorMsg = 'PDQ WASM module not available. ' +
             (typeof window !== 'undefined'
               ? 'Provide wasmUrl option or bundle the WASM module.'
-              : 'Make sure to run: npm run build:wasm')
-          );
+              : 'Make sure to run: npm run build:wasm');
+          this.log(`ERROR: ${errorMsg}`);
+          throw new Error(errorMsg);
         }
 
-        this.module = await createPDQModuleFactory(options);
+        this.module = await factory(options);
+        this.log('PDQ WASM module initialized successfully (Node.js)');
       }
     })();
 
@@ -132,7 +230,9 @@ export class PDQ {
    */
   private static ensureInit(): PDQWasmModule {
     if (!this.module) {
-      throw new Error('PDQ module not initialized. Call PDQ.init() first.');
+      const errorMsg = 'PDQ module not initialized. Call PDQ.init() first.';
+      this.log(`ERROR: ${errorMsg}`);
+      throw new Error(errorMsg);
     }
     return this.module;
   }
@@ -146,12 +246,14 @@ export class PDQ {
   static hash(imageData: ImageData): PDQHashResult {
     const mod = this.ensureInit();
 
+    this.log(`Hashing image: ${imageData.width}x${imageData.height}, ${imageData.channels} channels`);
+
     // Validate input
     const expectedSize = imageData.width * imageData.height * imageData.channels;
     if (imageData.data.length !== expectedSize) {
-      throw new Error(
-        `Invalid image data size. Expected ${expectedSize} bytes, got ${imageData.data.length}`
-      );
+      const errorMsg = `Invalid image data size. Expected ${expectedSize} bytes, got ${imageData.data.length}`;
+      this.handleError(errorMsg);
+      if (this.ignoreInvalidFlag) return { hash: new Uint8Array(32), quality: 0 };
     }
 
     // Allocate memory in WASM
@@ -186,13 +288,17 @@ export class PDQ {
       }
 
       if (result !== 0) {
-        throw new Error(`PDQ hashing failed with code: ${result}`);
+        const errorMsg = `PDQ hashing failed with code: ${result}`;
+        this.log(`ERROR: ${errorMsg}`);
+        throw new Error(errorMsg);
       }
 
       // Read results from WASM memory
       const hash = new Uint8Array(32);
       hash.set(mod.HEAPU8.subarray(hashPtr, hashPtr + 32));
       const quality = mod.HEAP32[qualityPtr >> 2];
+
+      this.log(`Hash generated successfully. Quality: ${quality}`);
 
       return { hash, quality };
     } finally {
@@ -215,7 +321,9 @@ export class PDQ {
     const mod = this.ensureInit();
 
     if (hash1.length !== 32 || hash2.length !== 32) {
-      throw new Error('Invalid hash length. PDQ hashes must be 32 bytes.');
+      const errorMsg = `Invalid hash length. PDQ hashes must be 32 bytes (got ${hash1.length} and ${hash2.length})`;
+      this.handleError(errorMsg);
+      if (this.ignoreInvalidFlag) return 256; // Return maximum distance for invalid hashes
     }
 
     const hash1Ptr = mod._malloc(32);
@@ -228,8 +336,12 @@ export class PDQ {
       const distance = mod._pdq_hamming_distance(hash1Ptr, hash2Ptr);
 
       if (distance < 0) {
-        throw new Error('Failed to calculate Hamming distance');
+        const errorMsg = 'Failed to calculate Hamming distance';
+        this.log(`ERROR: ${errorMsg}`);
+        throw new Error(errorMsg);
       }
+
+      this.log(`Hamming distance calculated: ${distance}`);
 
       return distance;
     } finally {
@@ -248,7 +360,9 @@ export class PDQ {
     const mod = this.ensureInit();
 
     if (hash.length !== 32) {
-      throw new Error('Invalid hash length. PDQ hashes must be 32 bytes.');
+      const errorMsg = `Invalid hash length. PDQ hashes must be 32 bytes (got ${hash.length})`;
+      this.handleError(errorMsg);
+      if (this.ignoreInvalidFlag) return '0'.repeat(64); // Return zero hash
     }
 
     const hashPtr = mod._malloc(32);
@@ -263,6 +377,8 @@ export class PDQ {
       for (let i = 0; i < 64; i++) {
         hex += String.fromCharCode(mod.HEAPU8[hexPtr + i]);
       }
+
+      this.log(`Hash converted to hex: ${hex}`);
 
       return hex;
     } finally {
@@ -280,8 +396,12 @@ export class PDQ {
   static fromHex(hex: string): PDQHash {
     const mod = this.ensureInit();
 
+    this.log(`Converting hex to hash: ${hex}`);
+
     if (hex.length !== 64) {
-      throw new Error('Invalid hex string length. Must be 64 characters.');
+      const errorMsg = `Invalid hex string length. Must be 64 characters (got ${hex.length})`;
+      this.handleError(errorMsg);
+      if (this.ignoreInvalidFlag) return new Uint8Array(32); // Return zero hash
     }
 
     const hexPtr = mod._malloc(65);
@@ -297,11 +417,17 @@ export class PDQ {
       const result = mod._pdq_hex_to_hash(hexPtr, hashPtr);
 
       if (result !== 0) {
-        throw new Error('Invalid hex string format');
+        const errorMsg = 'Invalid hex string format';
+        this.handleError(errorMsg);
+        if (this.ignoreInvalidFlag) {
+          return new Uint8Array(32); // Return zero hash
+        }
       }
 
       const hash = new Uint8Array(32);
       hash.set(mod.HEAPU8.subarray(hashPtr, hashPtr + 32));
+
+      this.log('Hex converted to hash successfully');
 
       return hash;
     } finally {
@@ -354,36 +480,42 @@ export class PDQ {
     hashes: PDQHash[],
     includeIndex: boolean = false
   ): SimilarityMatch[] {
+    this.log(`Ordering ${hashes.length} hashes by similarity to reference`);
+
     // Validate reference hash length (PDQ hashes are always 32 bytes)
     if (referenceHash.length !== 32) {
-      throw new Error('Invalid reference hash length. PDQ hashes must be 32 bytes.');
+      const errorMsg = `Invalid reference hash length. PDQ hashes must be 32 bytes (got ${referenceHash.length})`;
+      this.handleError(errorMsg);
+      if (this.ignoreInvalidFlag) return []; // Return empty array
     }
 
     const expectedLength = referenceHash.length;
 
     // Calculate distance and similarity for each hash
-    const matches: SimilarityMatch[] = hashes.map((hash, index) => {
-      if (hash.length !== expectedLength) {
-        throw new Error(
-          `Invalid hash length at index ${index}. Expected ${expectedLength} bytes, got ${hash.length}.`
-        );
-      }
+    const matches: SimilarityMatch[] = hashes
+      .map((hash, index) => {
+        if (hash.length !== expectedLength) {
+          const errorMsg = `Invalid hash length at index ${index}. Expected ${expectedLength} bytes, got ${hash.length}`;
+          this.handleError(errorMsg);
+          if (this.ignoreInvalidFlag) return null; // Skip invalid hash
+        }
 
-      const distance = this.hammingDistance(referenceHash, hash);
-      const similarity = this.similarity(referenceHash, hash);
+        const distance = this.hammingDistance(referenceHash, hash);
+        const similarity = this.similarity(referenceHash, hash);
 
-      const match: SimilarityMatch = {
-        hash,
-        distance,
-        similarity,
-      };
+        const match: SimilarityMatch = {
+          hash,
+          distance,
+          similarity,
+        };
 
-      if (includeIndex) {
-        match.index = index;
-      }
+        if (includeIndex) {
+          match.index = index;
+        }
 
-      return match;
-    });
+        return match;
+      })
+      .filter((match): match is SimilarityMatch => match !== null);
 
     // Sort by distance (ascending - most similar first)
     // Use secondary sort by original index for stable ordering
@@ -396,6 +528,8 @@ export class PDQ {
       const indexB = includeIndex ? (b.index ?? 0) : hashes.indexOf(b.hash);
       return indexA - indexB;
     });
+
+    this.log(`Ordered ${matches.length} hashes. Best match has distance ${matches[0]?.distance ?? 'N/A'}`);
 
     return matches;
   }
