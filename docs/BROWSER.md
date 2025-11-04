@@ -215,23 +215,47 @@ Throws if:
 
 Generate PDQ perceptual hash from an image data URL or blob URL. Uses Canvas API for image processing.
 
-**⚠️ IMPORTANT:** You must call `URL.revokeObjectURL()` after hashing blob URLs to prevent memory leaks.
+**Memory Management:** Blob URLs can be automatically revoked after processing using the `autoRevoke` parameter to prevent memory leaks. This is useful when you don't need the blob URL for preview display. Data URLs are never affected.
 
 ### Signature
 
 ```typescript
-function generateHashFromDataUrl(dataUrl: string): Promise<string>
+function generateHashFromDataUrl(
+  dataUrl: string,
+  autoRevoke?: boolean
+): Promise<string>
 ```
 
 ### Parameters
 
 - **dataUrl**: `string` - Image data URL (`data:image/...`) or blob URL (`blob:...`)
+- **autoRevoke**: `boolean` - Automatically revoke blob URLs after processing (default: `false`)
 
 ### Returns
 
 `Promise<string>` - 64-character hex PDQ hash
 
 ### From File Input (Blob URLs)
+
+**With Auto-Revoke (Recommended for simple cases):**
+
+```javascript
+const fileInput = document.querySelector('input[type="file"]');
+
+fileInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  const blobUrl = URL.createObjectURL(file);
+
+  // Auto-revoke: blob URL cleaned up automatically after hashing
+  const hash = await generateHashFromDataUrl(blobUrl, true);
+  console.log(`PDQ Hash: ${hash}`);
+
+  // Use hash (check for duplicates, store, etc.)
+  await checkForDuplicate(hash);
+});
+```
+
+**Without Auto-Revoke (When you need the blob URL for display):**
 
 ```javascript
 const fileInput = document.querySelector('input[type="file"]');
@@ -244,11 +268,15 @@ fileInput.addEventListener('change', async (e) => {
     const hash = await generateHashFromDataUrl(blobUrl);
     console.log(`PDQ Hash: ${hash}`);
 
+    // Display image preview using the same blob URL
+    document.querySelector('img').src = blobUrl;
+
     // Use hash (check for duplicates, store, etc.)
     await checkForDuplicate(hash);
 
   } finally {
-    // ⚠️ CRITICAL: Always revoke blob URLs to prevent memory leaks
+    // ⚠️ IMPORTANT: Manually revoke when you're done with the blob URL
+    // (e.g., when component unmounts or image is replaced)
     URL.revokeObjectURL(blobUrl);
   }
 });
@@ -310,6 +338,8 @@ Throws if:
 - Preserves original image dimensions
 - Handles cross-origin images with `crossOrigin = 'anonymous'`
 - Works with any image format supported by the browser
+- Auto-revoke feature only affects blob URLs (`blob:...`), never data URLs (`data:image/...`)
+- Auto-revoke happens after successful hash generation or on any error path
 
 ---
 

@@ -8,15 +8,37 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-function addJsExtensions(dir) {
-  const files = fs.readdirSync(dir);
+/**
+ * Validate that a directory path is safe (no traversal attacks)
+ * @param {string} dirPath - Directory path to validate
+ * @param {string} basePath - Base path that dir must be within
+ * @throws {Error} if path is unsafe
+ */
+function validatePath(dirPath, basePath) {
+  const resolvedDir = path.resolve(dirPath);
+  const resolvedBase = path.resolve(basePath);
+
+  // Ensure the resolved path is within the base path
+  if (!resolvedDir.startsWith(resolvedBase)) {
+    throw new Error(`Path traversal detected: ${dirPath} is outside ${basePath}`);
+  }
+
+  return resolvedDir;
+}
+
+function addJsExtensions(dir, basePath) {
+  // Validate path before any fs operations
+  const safePath = validatePath(dir, basePath);
+  const files = fs.readdirSync(safePath);
 
   for (const file of files) {
-    const filePath = path.join(dir, file);
+    const filePath = path.join(safePath, file);
+    // Validate joined path
+    validatePath(filePath, basePath);
     const stat = fs.statSync(filePath);
 
     if (stat.isDirectory()) {
-      addJsExtensions(filePath);
+      addJsExtensions(filePath, basePath);
     } else if (file.endsWith('.js')) {
       let content = fs.readFileSync(filePath, 'utf8');
 
@@ -59,8 +81,9 @@ async function build() {
 
     // Add .js extensions to all imports (required for browser ES modules)
     console.log('Adding .js extensions to imports...');
-    const esmDir = path.join(__dirname, '../dist/esm');
-    addJsExtensions(esmDir);
+    const projectRoot = path.join(__dirname, '..');
+    const esmDir = path.join(projectRoot, 'dist/esm');
+    addJsExtensions(esmDir, projectRoot);
 
     // Create package.json in ESM directory to mark it as ESM
     const esmPackageJson = {

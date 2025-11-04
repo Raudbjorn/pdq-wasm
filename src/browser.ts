@@ -335,11 +335,12 @@ export interface PDQImageData {
  * Generate PDQ perceptual hash from an image data URL or blob URL
  * Browser-only function that uses DOM APIs (Image, Canvas) for image processing
  *
- * **Important:** This function does NOT automatically revoke blob URLs. When using
- * `URL.createObjectURL()`, you must call `URL.revokeObjectURL()` after hashing
- * to prevent memory leaks.
+ * **Auto-cleanup:** Blob URLs can be automatically revoked after processing using the
+ * `autoRevoke` parameter to prevent memory leaks. Useful when you don't need the blob
+ * URL for preview display. Data URLs (data:image/...) are never revoked.
  *
  * @param dataUrl - Image data URL (data:image/...) or blob URL (blob:...)
+ * @param autoRevoke - Automatically revoke blob URLs after processing (default: false)
  * @returns Promise resolving to 64-character hex hash string
  *
  * @throws Error if called in non-browser environment
@@ -348,26 +349,34 @@ export interface PDQImageData {
  *
  * @example
  * ```typescript
- * // From file input - REMEMBER to revoke blob URL!
+ * // Auto-revoke blob URL (when you don't need it for display)
  * const file = input.files[0];
  * const blobUrl = URL.createObjectURL(file);
- * try {
- *   const hash = await generateHashFromDataUrl(blobUrl);
- *   console.log(`PDQ hash: ${hash}`);
- * } finally {
- *   URL.revokeObjectURL(blobUrl); // Always clean up!
- * }
+ * const hash = await generateHashFromDataUrl(blobUrl, true);
+ * // Blob URL automatically revoked!
  * ```
  *
  * @example
  * ```typescript
- * // From canvas (data URLs don't need cleanup)
+ * // Keep blob URL for preview (manual revocation required)
+ * const blobUrl = URL.createObjectURL(file);
+ * const hash = await generateHashFromDataUrl(blobUrl, false);
+ * // Display preview using blobUrl...
+ * // Later: URL.revokeObjectURL(blobUrl);
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // From canvas (data URLs don't need revocation)
  * const canvas = document.getElementById('myCanvas');
  * const dataUrl = canvas.toDataURL('image/png');
  * const hash = await generateHashFromDataUrl(dataUrl);
  * ```
  */
-export async function generateHashFromDataUrl(dataUrl: string): Promise<string> {
+export async function generateHashFromDataUrl(
+  dataUrl: string,
+  autoRevoke: boolean = false
+): Promise<string> {
   // Check if we're in a browser environment
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     throw new Error(
@@ -375,6 +384,10 @@ export async function generateHashFromDataUrl(dataUrl: string): Promise<string> 
       'Cannot generate hashes server-side.'
     );
   }
+
+  // Check if this is a blob URL and should be auto-revoked
+  const isBlobUrl = dataUrl.startsWith('blob:');
+  const shouldRevoke = isBlobUrl && autoRevoke;
 
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -386,6 +399,10 @@ export async function generateHashFromDataUrl(dataUrl: string): Promise<string> 
         const ctx = canvas.getContext('2d');
 
         if (!ctx) {
+          // Revoke blob URL on error if auto-revoke enabled
+          if (shouldRevoke) {
+            URL.revokeObjectURL(dataUrl);
+          }
           reject(new Error('Could not get canvas context'));
           return;
         }
@@ -421,13 +438,26 @@ export async function generateHashFromDataUrl(dataUrl: string): Promise<string> 
         const result = PDQ.hash(pdqImageData);
         const hexHash = PDQ.toHex(result.hash);
 
+        // Revoke blob URL after successful processing if enabled
+        if (shouldRevoke) {
+          URL.revokeObjectURL(dataUrl);
+        }
+
         resolve(hexHash);
       } catch (error) {
+        // Revoke blob URL on error if auto-revoke enabled
+        if (shouldRevoke) {
+          URL.revokeObjectURL(dataUrl);
+        }
         reject(error);
       }
     };
 
     img.onerror = () => {
+      // Revoke blob URL on load error if auto-revoke enabled
+      if (shouldRevoke) {
+        URL.revokeObjectURL(dataUrl);
+      }
       reject(new Error('Failed to load image'));
     };
 
