@@ -129,16 +129,20 @@ export class PDQ {
    * Must be called before using any PDQ functions
    *
    * @param options Configuration options
-   * @param options.wasmUrl URL to load WASM module from (browser only)
+   * @param options.wasmUrl URL to load WASM module from (browser only, defaults to CDN)
    *
    * @example
    * // Node.js (uses bundled WASM)
    * await PDQ.init();
    *
    * @example
-   * // Browser with CDN
+   * // Browser (automatically uses CDN)
+   * await PDQ.init();
+   *
+   * @example
+   * // Browser with custom URL
    * await PDQ.init({
-   *   wasmUrl: 'https://unpkg.com/pdq-wasm@0.2.0/wasm/pdq.wasm'
+   *   wasmUrl: '/assets/pdq.wasm'
    * });
    */
   static async init(options: PDQOptions = {}): Promise<void> {
@@ -149,8 +153,18 @@ export class PDQ {
     this.initPromise = (async () => {
       this.log('Initializing PDQ WASM module...');
 
-      // Browser environment with custom WASM URL
-      if (options.wasmUrl && typeof window !== 'undefined') {
+      // Browser environment
+      if (typeof window !== 'undefined') {
+        // Default to CDN if no wasmUrl provided
+        if (!options.wasmUrl) {
+          // Use unpkg.com CDN - pins to current package version for stability
+          // Users can also use @latest or a different CDN (jsDelivr, etc.)
+          const version = '0.3.3'; // TODO: Auto-sync with package.json version
+          options.wasmUrl = `https://unpkg.com/pdq-wasm@${version}/wasm/pdq.wasm`;
+          this.log(`No wasmUrl provided, using CDN: ${options.wasmUrl}`);
+          this.log('For production, consider self-hosting the WASM files for better reliability');
+        }
+
         this.log(`Loading WASM module from: ${options.wasmUrl}`);
         try {
           // Dynamically load the WASM module factory script
@@ -205,14 +219,11 @@ export class PDQ {
           throw new Error(errorMsg);
         }
       } else {
-        // Node.js or browser without custom URL
+        // Node.js environment - use bundled WASM
         this.log('Loading WASM module (Node.js)...');
         const factory = getWasmFactory();
         if (!factory) {
-          const errorMsg = 'PDQ WASM module not available. ' +
-            (typeof window !== 'undefined'
-              ? 'Provide wasmUrl option or bundle the WASM module.'
-              : 'Make sure to run: npm run build:wasm');
+          const errorMsg = 'PDQ WASM module not available. Make sure to run: npm run build:wasm';
           this.log(`ERROR: ${errorMsg}`);
           throw new Error(errorMsg);
         }
