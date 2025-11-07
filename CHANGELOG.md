@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.7] - 2025-11-07
+
+### Fixed
+- **ES module worker support** - Fixed `PDQ.initWorker()` failing in ES module workers (created with `{ type: 'module' }`)
+- `isWorkerEnvironment()` no longer requires `importScripts` function, which doesn't exist in ES module workers
+- ES module workers now properly detected via `WorkerGlobalScope` and `typeof window === 'undefined'` checks
+
+### Technical Details
+- Removed `typeof importScripts === 'function'` requirement from worker environment detection
+- ES module worker fallback to dynamic import (lines 348-367) now reachable
+- Fixes issue where ES module workers would throw error before reaching fallback logic
+- Both classic workers (with `importScripts`) and ES module workers now fully supported
+
 ## [0.3.6] - 2025-11-07
 
 ### Changed

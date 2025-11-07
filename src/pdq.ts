@@ -49,8 +49,8 @@ function getWasmFactory(): any {
 function isWorkerEnvironment(): boolean {
   return (
     typeof self !== 'undefined' &&
-    // @ts-ignore - importScripts is only available in workers
-    typeof importScripts === 'function' &&
+    // Don't require importScripts - ES module workers don't have it
+    // Check for worker global scope types or absence of window
     (
       // Check for any worker global scope type
       // @ts-ignore - WorkerGlobalScope types only available in workers
@@ -59,7 +59,7 @@ function isWorkerEnvironment(): boolean {
       typeof DedicatedWorkerGlobalScope !== 'undefined' ||
       // @ts-ignore - SharedWorkerGlobalScope only in shared workers
       typeof SharedWorkerGlobalScope !== 'undefined' ||
-      // Simpler check: absence of window (most reliable)
+      // Simpler check: absence of window (most reliable for both classic and ES module workers)
       typeof window === 'undefined'
     )
   );

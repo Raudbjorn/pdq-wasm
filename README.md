@@ -101,7 +101,7 @@ const hexHash: string = PDQ.toHex(result.hash);
 
 ```html
 <script type="module">
-  import { PDQ } from 'https://unpkg.com/pdq-wasm@0.3.6/dist/esm/index.js';
+  import { PDQ } from 'https://unpkg.com/pdq-wasm@0.3.7/dist/esm/index.js';
 
   async function main() {
     // Initialize - automatically loads WASM from CDN!
@@ -230,9 +230,9 @@ await PDQ.init({ wasmUrl: '/assets/pdq.wasm' });
 
 If you prefer to use a CDN:
 
-- **unpkg** (default): `https://unpkg.com/pdq-wasm@0.3.6/wasm/pdq.wasm`
+- **unpkg** (default): `https://unpkg.com/pdq-wasm@0.3.7/wasm/pdq.wasm`
 - **jsDelivr**: `https://cdn.jsdelivr.net/npm/pdq-wasm@0.3.6/wasm/pdq.wasm`
-- **unpkg (latest)**: `https://unpkg.com/pdq-wasm@0.3.6/wasm/pdq.wasm`
+- **unpkg (latest)**: `https://unpkg.com/pdq-wasm@0.3.7/wasm/pdq.wasm`
 
 You can also specify a custom CDN:
 ```javascript
@@ -257,11 +257,11 @@ The package.json `exports` field automatically selects the right version based o
 
 ```javascript
 // worker.js
-importScripts('https://unpkg.com/pdq-wasm@0.3.6/dist/browser.js');
+importScripts('https://unpkg.com/pdq-wasm@0.3.7/dist/browser.js');
 
 // Initialize PDQ in the worker
 await PDQ.initWorker({
-  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.6/wasm/pdq.wasm'
+  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.7/wasm/pdq.wasm'
 });
 
 // Handle messages from main thread

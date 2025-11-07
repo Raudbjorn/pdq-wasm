@@ -9,14 +9,14 @@
 // SECURITY NOTE: For production, self-host the files instead of using CDN
 // This example uses a pinned version for reproducibility
 // Version is auto-updated by `npm version` command via scripts/update-version-in-examples.js
-importScripts('https://unpkg.com/pdq-wasm@0.3.6/dist/browser.js');
+importScripts('https://unpkg.com/pdq-wasm@0.3.7/dist/browser.js');
 
 // Initialize PDQ in the worker
 async function init() {
   try {
     await PDQ.initWorker({
       // Pin to specific version to ensure reproducibility and security
-      wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.6/wasm/pdq.wasm'
+      wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.7/wasm/pdq.wasm'
     });
     console.log('PDQ initialized in worker');
     self.postMessage({ type: 'ready' });
