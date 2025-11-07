@@ -67,7 +67,7 @@ async function main() {
   console.log('4. Comparing hashes...');
   const distance = PDQ.hammingDistance(result.hash, result2.hash);
   const similarity = PDQ.similarity(result.hash, result2.hash);
-  const isSimilar = PDQ.isSimilar(result.hash, result2.hash);
+  const isSimilar = PDQ.areSimilar(result.hash, result2.hash);
 
   console.log(`   Hamming distance: ${distance} / 256`);
   console.log(`   Similarity: ${similarity.toFixed(2)}%`);

@@ -136,25 +136,25 @@
     <p><strong>Similarity:</strong> Percentage similarity based on the Hamming distance (100% - (distance/256 * 100)).</p>
   </div>
 
-  <!-- Using unpkg.com CDN for demonstration -->
+  <!-- PDQ WASM - Zero Configuration Required! -->
   <script type="module">
-    // For production, you would typically bundle this with your build system
-    // This example uses a local build - adjust the path as needed
+    // This example demonstrates the CDN-first approach
+    // Option 1: Use CDN (recommended for getting started)
+    // import { PDQ } from 'https://unpkg.com/pdq-wasm@0.3.3/dist/esm/index.js';
 
-    // In a real deployment, you'd import from CDN or your bundled version:
-    // import { PDQ } from 'https://unpkg.com/pdq-wasm@latest/dist/index.mjs';
-
-    // For this example, we'll load from the local build
+    // Option 2: Use local build (for development)
     // You may need to serve this with a local server due to CORS restrictions
-    import { PDQ } from '../../dist/index.js';
+    import { PDQ } from '../../dist/esm/index.js';
 
     let hash1 = null;
     let hash2 = null;
 
-    // Initialize PDQ
+    // Initialize PDQ - Now with ZERO configuration!
+    // The library automatically loads WASM from CDN if not specified
     console.log('Initializing PDQ WASM module...');
-    await PDQ.init();
+    await PDQ.init(); // That's it! No wasmUrl needed for browsers
     console.log('PDQ WASM module initialized');
+    console.log('✓ WASM loaded automatically from CDN');
 
     const image1Input = document.getElementById('image1Input');
     const image2Input = document.getElementById('image2Input');
@@ -208,7 +208,7 @@
 
       const distance = PDQ.hammingDistance(hash1.hash, hash2.hash);
       const similarity = PDQ.similarity(hash1.hash, hash2.hash);
-      const isSimilar = PDQ.isSimilar(hash1.hash, hash2.hash); // Uses default threshold of 31
+      const isSimilar = PDQ.areSimilar(hash1.hash, hash2.hash); // Uses default threshold of 31
 
       comparisonResult.innerHTML = `
         <div class="comparison">

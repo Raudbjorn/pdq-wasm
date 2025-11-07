@@ -95,19 +95,17 @@ const result = await hashImage(imageData);
 const hexHash: string = PDQ.toHex(result.hash);
 ```
 
-### Browser (with CDN)
+### Browser
 
-For browser environments, you can load the WASM module from a CDN:
+**The easiest way to use PDQ-WASM in the browser:**
 
 ```html
 <script type="module">
-  import { PDQ } from 'https://unpkg.com/pdq-wasm@0.3.2/dist/index.js';
+  import { PDQ } from 'https://unpkg.com/pdq-wasm@0.3.3/dist/esm/index.js';
 
   async function main() {
-    // Initialize with WASM URL from CDN
-    await PDQ.init({
-      wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.2/wasm/pdq.wasm'
-    });
+    // Initialize - automatically loads WASM from CDN!
+    await PDQ.init();
 
     // Now use PDQ as normal
     const canvas = document.getElementById('myCanvas');
@@ -141,44 +139,109 @@ For browser environments, you can load the WASM module from a CDN:
 </script>
 ```
 
-**Available CDN URLs:**
-- **unpkg**: `https://unpkg.com/pdq-wasm@0.3.2/wasm/pdq.wasm`
-- **jsDelivr**: `https://cdn.jsdelivr.net/npm/pdq-wasm@0.3.2/wasm/pdq.wasm`
-- **GitHub Releases**: `https://github.com/Raudbjorn/pdq-wasm/releases/download/v0.3.0/pdq.wasm` (after uploading WASM as release asset)
+**Key Points:**
+- 🎉 **Zero configuration required!** Just call `PDQ.init()` and it automatically loads WASM from CDN
+- 📦 **No bundler setup needed** for quick prototyping
+- 🌐 **Production ready** with unpkg.com CDN (see self-hosting below for maximum control)
 
-For production use with a custom domain, you can:
-1. Set up GitHub Pages to serve the WASM files
-2. Configure a CNAME for your domain
-3. Load from your custom domain: `https://cdn.yourdomain.com/pdq.wasm`
+#### Using with npm + bundlers
 
-### Browser (ES Modules - Local Development)
-
-For local development or bundled applications, you can use ES modules directly:
-
-```html
-<script type="module">
-  import { PDQ } from './node_modules/pdq-wasm/dist/esm/index.js';
-
-  // Initialize with relative WASM URL
-  await PDQ.init({
-    wasmUrl: './node_modules/pdq-wasm/wasm/pdq.wasm'
-  });
-
-  // Use PDQ normally
-  const result = PDQ.hash(imageData);
-</script>
-```
-
-**With bundlers (Vite, Webpack, Rollup):**
+If you've installed via npm, you can use it in your bundled application:
 
 ```javascript
 import { PDQ } from 'pdq-wasm';
 
-// The bundler will automatically resolve the ES module
+// Option 1: Use CDN (easiest, zero config)
+await PDQ.init();
+
+// Option 2: Self-host for production (recommended)
 await PDQ.init({
-  wasmUrl: '/wasm/pdq.wasm'  // Copy wasm file to public directory
+  wasmUrl: '/assets/pdq.wasm'
 });
 ```
+
+#### Self-hosting WASM files (Recommended for production)
+
+While the CDN approach is convenient, for production we recommend self-hosting for better reliability and control:
+
+**Step 1: Copy WASM files to your static assets**
+```bash
+# Copy from node_modules after npm install
+cp node_modules/pdq-wasm/wasm/* public/assets/
+```
+
+**Step 2: Configure bundler (optional - automate the copy)**
+
+<details>
+<summary><strong>Vite Configuration</strong></summary>
+
+```bash
+npm install -D vite-plugin-static-copy
+```
+
+```javascript
+// vite.config.js
+import { defineConfig } from 'vite';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
+
+export default defineConfig({
+  plugins: [
+    viteStaticCopy({
+      targets: [{
+        src: 'node_modules/pdq-wasm/wasm/*',
+        dest: 'assets'
+      }]
+    })
+  ]
+});
+```
+</details>
+
+<details>
+<summary><strong>Webpack Configuration</strong></summary>
+
+```bash
+npm install -D copy-webpack-plugin
+```
+
+```javascript
+// webpack.config.js
+const CopyPlugin = require('copy-webpack-plugin');
+
+module.exports = {
+  plugins: [
+    new CopyPlugin({
+      patterns: [{
+        from: 'node_modules/pdq-wasm/wasm',
+        to: 'assets'
+      }]
+    })
+  ]
+};
+```
+</details>
+
+**Step 3: Use your self-hosted files**
+```javascript
+await PDQ.init({ wasmUrl: '/assets/pdq.wasm' });
+```
+
+#### Available CDN Options
+
+If you prefer to use a CDN:
+
+- **unpkg** (default): `https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm`
+- **jsDelivr**: `https://cdn.jsdelivr.net/npm/pdq-wasm@0.3.3/wasm/pdq.wasm`
+- **unpkg (latest)**: `https://unpkg.com/pdq-wasm@latest/wasm/pdq.wasm`
+
+You can also specify a custom CDN:
+```javascript
+await PDQ.init({
+  wasmUrl: 'https://your-cdn.com/pdq.wasm'
+});
+```
+
+#### Module System Support
 
 **Package exports both CommonJS and ES Modules:**
 - ES Module: `pdq-wasm/dist/esm/index.js` (for browsers and modern Node.js)
