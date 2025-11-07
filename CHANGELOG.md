@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2025-11-07
+
+### Changed
+- **Refactored environment detection** - `generateHashFromDataUrl()` now uses centralized `getEnvironment()` for consistent environment detection across the codebase
+- **Code quality improvements** - Used object destructuring for version extraction per ESLint best practices
+
+### Documentation
+- **Added E2E test references** - Skipped browser tests now include comments linking to Playwright E2E coverage for traceability
+- **Updated CDN links** - All jsDelivr references now point to correct version (0.3.6)
+
+### Technical Details
+- Eliminated duplicate environment detection logic in `generateHashFromDataUrl()`
+- Changed `const version = pkg.version` to `const { version } = require(...)`
+- Added `// See: __tests__/e2e/duplicate-detection.spec.ts` comments to 3 skipped tests
+- Improved code maintainability by consolidating environment checks
+
 ## [0.3.5] - 2025-11-07
 
 ### Added
