@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] - 2025-11-07
+
+### Fixed
+- **ESM bundler compatibility** - Fixed `require('../package.json')` causing build errors in Vite and other ESM-first bundlers
+- **ES module worker initialization** - Fixed `importScripts()` call failing with "Module scripts don't support importScripts()"
+- Wrapped `importScripts()` in try-catch to gracefully fall back to dynamic import when it fails
+- Made `require()` call non-statically-analyzable to prevent bundler pre-optimization issues
+
+### Technical Details
+- **Worker initialization**: `PDQ.initWorker()` now tries `importScripts()` first, catches the error in ES module workers, and falls back to dynamic `import()`
+- **Version loading**: Changed direct `require()` to indirect reference: `const req = require; req('../package.json')`
+- Added `typeof require !== 'undefined'` check before attempting dynamic require
+- Prevents Vite's dependency pre-bundling from failing on CommonJS require statements
+- Both classic workers and ES module workers now fully functional with proper fallback logic
+
 ## [0.3.7] - 2025-11-07
 
 ### Fixed
