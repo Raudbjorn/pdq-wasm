@@ -11,6 +11,7 @@ import type {
   ImageData,
   PDQWasmModule,
   PDQOptions,
+  PDQWorkerOptions,
   SimilarityMatch,
   LoggerFunction,
 } from './types';
@@ -39,6 +40,26 @@ function getWasmFactory(): any {
 
   // Browser environment or Node.js ESM without require - will need to be provided via options
   return null;
+}
+
+/**
+ * Detect if we're running in a Web Worker environment
+ */
+function isWorkerEnvironment(): boolean {
+  return (
+    typeof self !== 'undefined' &&
+    // @ts-ignore - importScripts is only available in workers
+    typeof importScripts === 'function' &&
+    // @ts-ignore - WorkerGlobalScope is only available in workers
+    typeof WorkerGlobalScope !== 'undefined'
+  );
+}
+
+/**
+ * Detect if we're running in a browser (non-worker) environment
+ */
+function isBrowserEnvironment(): boolean {
+  return typeof window !== 'undefined' && !isWorkerEnvironment();
 }
 
 /**
@@ -153,8 +174,8 @@ export class PDQ {
     this.initPromise = (async () => {
       this.log('Initializing PDQ WASM module...');
 
-      // Browser environment
-      if (typeof window !== 'undefined') {
+      // Browser environment (non-worker)
+      if (isBrowserEnvironment()) {
         // Default to CDN if no wasmUrl provided
         if (!options.wasmUrl) {
           // Use unpkg.com CDN - pins to current package version for stability
@@ -230,6 +251,89 @@ export class PDQ {
 
         this.module = await factory(options);
         this.log('PDQ WASM module initialized successfully (Node.js)');
+      }
+    })();
+
+    return this.initPromise;
+  }
+
+  /**
+   * Initialize the WASM module in a Web Worker environment
+   * Must be called before using any PDQ functions in a worker
+   *
+   * @param options Worker initialization options
+   * @param options.wasmUrl URL to the WASM file
+   * @param options.wasmJsUrl URL to the WASM JavaScript glue code (optional, defaults to wasmUrl.replace('.wasm', '.js'))
+   *
+   * @example
+   * // In a Web Worker
+   * await PDQ.initWorker({
+   *   wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm'
+   * });
+   *
+   * @example
+   * // With custom JS glue code URL
+   * await PDQ.initWorker({
+   *   wasmUrl: '/wasm/pdq.wasm',
+   *   wasmJsUrl: '/wasm/pdq.js'
+   * });
+   */
+  static async initWorker(options: PDQWorkerOptions): Promise<void> {
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    if (!isWorkerEnvironment()) {
+      throw new Error(
+        'initWorker() can only be called in a Web Worker environment. ' +
+        'Use PDQ.init() for browser or Node.js environments.'
+      );
+    }
+
+    this.initPromise = (async () => {
+      this.log('Initializing PDQ WASM module in Web Worker...');
+
+      const wasmJsUrl = options.wasmJsUrl || options.wasmUrl.replace(/\.wasm$/, '.js');
+
+      this.log(`Loading WASM module from: ${options.wasmUrl}`);
+      this.log(`Loading WASM JS glue code from: ${wasmJsUrl}`);
+
+      try {
+        // Use importScripts to load the WASM glue code synchronously
+        // This works in classic workers
+        // @ts-ignore - importScripts is only available in workers
+        if (typeof importScripts === 'function') {
+          // @ts-ignore - importScripts is only available in workers
+          importScripts(wasmJsUrl);
+
+          // The glue code should define createPDQModule on the global scope
+          const factory = (self as any).createPDQModule;
+
+          if (!factory) {
+            throw new Error('createPDQModule function not found after importing script');
+          }
+
+          // Initialize with the WASM URL
+          this.module = await factory({
+            locateFile: (path: string) => {
+              if (path.endsWith('.wasm')) {
+                return options.wasmUrl;
+              }
+              return path;
+            }
+          });
+
+          this.log('PDQ WASM module initialized successfully (Web Worker)');
+        } else {
+          throw new Error(
+            'importScripts is not available. This might be an ES module worker. ' +
+            'Consider using dynamic import or providing a bundled worker script.'
+          );
+        }
+      } catch (error) {
+        const errorMsg = `Failed to load WASM module in worker: ${error instanceof Error ? error.message : String(error)}`;
+        this.log(`ERROR: ${errorMsg}`);
+        throw new Error(errorMsg);
       }
     })();
 

@@ -70,6 +70,18 @@ export interface PDQOptions {
 }
 
 /**
+ * PDQ Worker initialization options
+ */
+export interface PDQWorkerOptions {
+  /** URL to the WASM file */
+  wasmUrl: string;
+  /** URL to the WASM JavaScript glue code (optional, defaults to wasmUrl.replace('.wasm', '.js')) */
+  wasmJsUrl?: string;
+  /** Logger function to log PDQ operations (optional) */
+  logger?: LoggerFunction;
+}
+
+/**
  * Similarity match result for ordering operations
  */
 export interface SimilarityMatch {

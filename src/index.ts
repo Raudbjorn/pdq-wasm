@@ -11,6 +11,7 @@ export type {
   PDQHashResult,
   ImageData,
   PDQOptions,
+  PDQWorkerOptions,
   SimilarityMatch,
 } from './types';
 
@@ -19,6 +20,7 @@ export {
   createHashChecker,
   hammingDistance,
   generateHashFromDataUrl,
+  generateHashFromBlob,
   detectDuplicatesByHash,
 } from './browser';
 

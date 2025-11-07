@@ -332,6 +332,94 @@ export interface PDQImageData {
 }
 
 /**
+ * Generate PDQ hash from a Blob or File in a worker-compatible way
+ * Uses createImageBitmap and OffscreenCanvas, which work in both browsers and workers
+ *
+ * @param blob Image blob or file
+ * @returns Hex-encoded PDQ hash
+ * @throws Error if image fails to load or decode
+ *
+ * @example
+ * ```typescript
+ * // In a Web Worker
+ * self.onmessage = async (event) => {
+ *   const file = event.data.file;
+ *   const hash = await generateHashFromBlob(file);
+ *   self.postMessage({ hash });
+ * };
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // In a browser (also works)
+ * const file = input.files[0];
+ * const hash = await generateHashFromBlob(file);
+ * ```
+ */
+export async function generateHashFromBlob(blob: Blob): Promise<string> {
+  // Check if createImageBitmap is available (works in both browsers and workers)
+  if (typeof createImageBitmap === 'undefined') {
+    throw new Error(
+      'createImageBitmap is not available in this environment. ' +
+      'Use generateHashFromDataUrl in older browsers.'
+    );
+  }
+
+  // Check if OffscreenCanvas is available
+  if (typeof OffscreenCanvas === 'undefined') {
+    throw new Error(
+      'OffscreenCanvas is not available in this environment. ' +
+      'Use generateHashFromDataUrl as a fallback.'
+    );
+  }
+
+  // Create an ImageBitmap from the blob
+  const imageBitmap = await createImageBitmap(blob);
+
+  try {
+    // Create an OffscreenCanvas to extract pixel data
+    const canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      throw new Error('Could not get 2D context from OffscreenCanvas');
+    }
+
+    // Draw the image to the canvas
+    ctx.drawImage(imageBitmap, 0, 0);
+
+    // Get image data (RGBA format)
+    const imageData = ctx.getImageData(0, 0, imageBitmap.width, imageBitmap.height);
+
+    // Convert RGBA to RGB (PDQ only supports RGB or grayscale)
+    const rgbData = new Uint8Array(imageBitmap.width * imageBitmap.height * 3);
+    for (let i = 0, j = 0; i < imageData.data.length; i += 4, j += 3) {
+      rgbData[j] = imageData.data[i];       // R
+      rgbData[j + 1] = imageData.data[i + 1]; // G
+      rgbData[j + 2] = imageData.data[i + 2]; // B
+      // Skip alpha channel
+    }
+
+    // Prepare PDQ image data structure
+    const pdqImageData: ImageData = {
+      data: rgbData,
+      width: imageBitmap.width,
+      height: imageBitmap.height,
+      channels: 3 // RGB
+    };
+
+    // Generate PDQ hash
+    const result = PDQ.hash(pdqImageData);
+    const hexHash = PDQ.toHex(result.hash);
+
+    return hexHash;
+  } finally {
+    // Clean up the ImageBitmap
+    imageBitmap.close();
+  }
+}
+
+/**
  * Generate PDQ perceptual hash from an image data URL or blob URL
  * Browser-only function that uses DOM APIs (Image, Canvas) for image processing
  *
