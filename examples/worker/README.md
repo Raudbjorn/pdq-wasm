@@ -16,12 +16,12 @@ Create a worker file (`pdq-worker.js`):
 
 ```javascript
 // Import PDQ (using importScripts for classic workers)
-importScripts('https://unpkg.com/pdq-wasm@latest/dist/browser.js');
+importScripts('https://unpkg.com/pdq-wasm@0.3.3/dist/browser.js');
 
 // Initialize PDQ in the worker
 async function init() {
   await PDQ.initWorker({
-    wasmUrl: 'https://unpkg.com/pdq-wasm@latest/wasm/pdq.wasm'
+    wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm'
   });
   self.postMessage({ type: 'ready' });
 }

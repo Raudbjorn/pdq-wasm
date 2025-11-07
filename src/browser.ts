@@ -335,9 +335,19 @@ export interface PDQImageData {
  * Generate PDQ hash from a Blob or File in a worker-compatible way
  * Uses createImageBitmap and OffscreenCanvas, which work in both browsers and workers
  *
+ * Browser Support:
+ * - Chrome 69+ (full support)
+ * - Firefox 105+ (OffscreenCanvas added in 105)
+ * - Safari 16.4+ (OffscreenCanvas support)
+ * - Edge 79+
+ *
+ * For older browsers, use generateHashFromDataUrl() as fallback.
+ *
  * @param blob Image blob or file
  * @returns Hex-encoded PDQ hash
- * @throws Error if image fails to load or decode
+ * @throws {Error} If createImageBitmap or OffscreenCanvas unavailable
+ * @throws {Error} If image fails to decode or has invalid dimensions
+ * @throws {Error} If image exceeds maximum dimension limit
  *
  * @example
  * ```typescript
@@ -373,8 +383,32 @@ export async function generateHashFromBlob(blob: Blob): Promise<string> {
     );
   }
 
-  // Create an ImageBitmap from the blob
-  const imageBitmap = await createImageBitmap(blob);
+  // Create an ImageBitmap from the blob with proper error handling
+  let imageBitmap: ImageBitmap;
+  try {
+    imageBitmap = await createImageBitmap(blob);
+  } catch (error) {
+    throw new Error(
+      `Failed to decode image: ${error instanceof Error ? error.message : 'Unknown error'}. ` +
+      'The file may be corrupted or in an unsupported format.'
+    );
+  }
+
+  // Validate image dimensions
+  if (!imageBitmap.width || !imageBitmap.height) {
+    imageBitmap.close();
+    throw new Error('Image has invalid dimensions (width or height is 0)');
+  }
+
+  // Add size limits to prevent DOS attacks via huge images
+  const MAX_DIMENSION = 10000; // 10,000 pixels max on any side
+  if (imageBitmap.width > MAX_DIMENSION || imageBitmap.height > MAX_DIMENSION) {
+    imageBitmap.close();
+    throw new Error(
+      `Image too large: ${imageBitmap.width}x${imageBitmap.height} pixels. ` +
+      `Maximum allowed: ${MAX_DIMENSION}x${MAX_DIMENSION}`
+    );
+  }
 
   try {
     // Create an OffscreenCanvas to extract pixel data

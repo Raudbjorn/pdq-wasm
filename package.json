@@ -38,6 +38,7 @@
     "test:all": "npm test && npm run test:e2e",
     "clean": "rm -rf dist build",
     "prepublishOnly": "npm run clean && npm run build",
+    "version": "node scripts/update-version-in-examples.js && git add examples/ README.md",
     "deploy": "bash scripts/deploy.sh",
     "deploy:patch": "bash scripts/deploy.sh patch",
     "deploy:minor": "bash scripts/deploy.sh minor",

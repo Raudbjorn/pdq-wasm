@@ -44,14 +44,24 @@ function getWasmFactory(): any {
 
 /**
  * Detect if we're running in a Web Worker environment
+ * Checks for worker-specific globals and absence of window
  */
 function isWorkerEnvironment(): boolean {
   return (
     typeof self !== 'undefined' &&
     // @ts-ignore - importScripts is only available in workers
     typeof importScripts === 'function' &&
-    // @ts-ignore - WorkerGlobalScope is only available in workers
-    typeof WorkerGlobalScope !== 'undefined'
+    (
+      // Check for any worker global scope type
+      // @ts-ignore - WorkerGlobalScope types only available in workers
+      typeof WorkerGlobalScope !== 'undefined' ||
+      // @ts-ignore - DedicatedWorkerGlobalScope only in dedicated workers
+      typeof DedicatedWorkerGlobalScope !== 'undefined' ||
+      // @ts-ignore - SharedWorkerGlobalScope only in shared workers
+      typeof SharedWorkerGlobalScope !== 'undefined' ||
+      // Simpler check: absence of window (most reliable)
+      typeof window === 'undefined'
+    )
   );
 }
 
@@ -307,10 +317,14 @@ export class PDQ {
           importScripts(wasmJsUrl);
 
           // The glue code should define createPDQModule on the global scope
-          const factory = (self as any).createPDQModule;
+          const factory = (self as any).createPDQModule as unknown;
 
-          if (!factory) {
-            throw new Error('createPDQModule function not found after importing script');
+          // Validate that the factory function was properly loaded
+          if (typeof factory !== 'function') {
+            throw new Error(
+              'createPDQModule function not found after importing script. ' +
+              `Ensure the WASM glue code loaded successfully from: ${wasmJsUrl}`
+            );
           }
 
           // Initialize with the WASM URL

@@ -6,15 +6,17 @@
  */
 
 // Import PDQ in the worker
-// Note: In a real application, you would use importScripts or ES module imports
-// For this example, we'll use importScripts to load from CDN
-importScripts('https://unpkg.com/pdq-wasm@latest/dist/browser.js');
+// SECURITY NOTE: For production, self-host the files instead of using CDN
+// This example uses a pinned version for reproducibility
+// Version is auto-updated by `npm version` command via scripts/update-version-in-examples.js
+importScripts('https://unpkg.com/pdq-wasm@0.3.3/dist/browser.js');
 
 // Initialize PDQ in the worker
 async function init() {
   try {
     await PDQ.initWorker({
-      wasmUrl: 'https://unpkg.com/pdq-wasm@latest/wasm/pdq.wasm'
+      // Pin to specific version to ensure reproducibility and security
+      wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm'
     });
     console.log('PDQ initialized in worker');
     self.postMessage({ type: 'ready' });
@@ -28,12 +30,42 @@ async function init() {
 self.onmessage = async (event) => {
   const { type, data } = event.data;
 
+  // Validate message structure
+  if (typeof type !== 'string') {
+    self.postMessage({
+      type: 'error',
+      error: 'Invalid message format'
+    });
+    return;
+  }
+
   switch (type) {
     case 'init':
       await init();
       break;
 
     case 'hash':
+      // Validate input
+      if (!data || !(data.file instanceof Blob)) {
+        self.postMessage({
+          type: 'error',
+          error: 'Invalid file object',
+          filename: data?.filename
+        });
+        return;
+      }
+
+      // Add size limit to prevent DOS attacks
+      const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+      if (data.file.size > MAX_SIZE) {
+        self.postMessage({
+          type: 'error',
+          error: `File too large: ${(data.file.size / 1024 / 1024).toFixed(1)}MB (max: 50MB)`,
+          filename: data.filename
+        });
+        return;
+      }
+
       try {
         // Use generateHashFromBlob which works in workers
         const hash = await generateHashFromBlob(data.file);
