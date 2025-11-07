@@ -101,7 +101,7 @@ const hexHash: string = PDQ.toHex(result.hash);
 
 ```html
 <script type="module">
-  import { PDQ } from 'https://unpkg.com/pdq-wasm@0.3.3/dist/esm/index.js';
+  import { PDQ } from 'https://unpkg.com/pdq-wasm@0.3.7/dist/esm/index.js';
 
   async function main() {
     // Initialize - automatically loads WASM from CDN!
@@ -230,9 +230,9 @@ await PDQ.init({ wasmUrl: '/assets/pdq.wasm' });
 
 If you prefer to use a CDN:
 
-- **unpkg** (default): `https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm`
-- **jsDelivr**: `https://cdn.jsdelivr.net/npm/pdq-wasm@0.3.3/wasm/pdq.wasm`
-- **unpkg (latest)**: `https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm`
+- **unpkg** (default): `https://unpkg.com/pdq-wasm@0.3.7/wasm/pdq.wasm`
+- **jsDelivr**: `https://cdn.jsdelivr.net/npm/pdq-wasm@0.3.6/wasm/pdq.wasm`
+- **unpkg (latest)**: `https://unpkg.com/pdq-wasm@0.3.7/wasm/pdq.wasm`
 
 You can also specify a custom CDN:
 ```javascript
@@ -249,6 +249,105 @@ await PDQ.init({
 
 The package.json `exports` field automatically selects the right version based on your environment.
 
+### Web Workers
+
+**✅ Full Web Worker Support** - Hash images in background threads for better performance!
+
+#### Quick Start: Workers
+
+```javascript
+// worker.js
+importScripts('https://unpkg.com/pdq-wasm@0.3.7/dist/browser.js');
+
+// Initialize PDQ in the worker
+await PDQ.initWorker({
+  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.7/wasm/pdq.wasm'
+});
+
+// Handle messages from main thread
+self.onmessage = async (event) => {
+  const { file } = event.data;
+
+  // ✅ Use generateHashFromBlob in workers
+  const hash = await generateHashFromBlob(file);
+
+  self.postMessage({ hash });
+};
+```
+
+```javascript
+// main.js
+const worker = new Worker('worker.js');
+
+worker.onmessage = (event) => {
+  console.log('Hash:', event.data.hash);
+};
+
+// Send file to worker
+const file = document.querySelector('input[type="file"]').files[0];
+worker.postMessage({ file });
+```
+
+#### Environment Detection
+
+Not sure which API to use? The `getEnvironment()` helper detects your runtime and recommends the right API:
+
+```javascript
+import { getEnvironment, generateHashFromBlob, generateHashFromDataUrl } from 'pdq-wasm/browser';
+
+const env = getEnvironment();
+console.log(`Running in: ${env.type}`); // 'browser', 'worker', 'node', or 'unknown'
+console.log(`Recommended API: ${env.recommendedAPI}`);
+
+// Automatically choose the right API
+let hash;
+if (env.supportsBlob) {
+  // ✅ RECOMMENDED - Works in browsers AND workers
+  hash = await generateHashFromBlob(file);
+} else if (env.supportsDataUrl) {
+  // ⚠️ Only works in browser main thread
+  hash = await generateHashFromDataUrl(dataUrl);
+}
+```
+
+#### API Comparison: Browser vs Workers
+
+| Feature | `generateHashFromBlob()` | `generateHashFromDataUrl()` |
+|---------|-------------------------|---------------------------|
+| **Browser Main Thread** | ✅ Yes | ✅ Yes |
+| **Web Workers** | ✅ Yes | ❌ No (throws error) |
+| **Uses** | `createImageBitmap` + `OffscreenCanvas` | `Image` + `Canvas` (DOM) |
+| **Input** | `Blob`, `File` | Data URL, Blob URL |
+| **Browser Support** | Chrome 69+, Firefox 105+, Safari 16.4+ | All browsers |
+| **Recommendation** | ✅ **Use this** | Legacy fallback only |
+
+#### Migration Guide: Fix Worker Errors
+
+If you're getting errors like:
+```
+Error: generateHashFromDataUrl() requires browser main thread (needs DOM APIs).
+For Web Workers, use generateHashFromBlob() instead...
+```
+
+**Migration is simple:**
+
+```javascript
+// ❌ BEFORE (doesn't work in workers)
+const dataUrl = URL.createObjectURL(file);
+const hash = await generateHashFromDataUrl(dataUrl);
+
+// ✅ AFTER (works everywhere)
+const hash = await generateHashFromBlob(file); // file is Blob/File
+```
+
+#### Complete Worker Example
+
+**📖 See: [examples/worker/README.md](./examples/worker/README.md)** for a complete working example with:
+- ES module and classic worker support
+- Worker pool management
+- Progress tracking
+- Error handling
+
 ## Browser Utilities
 
 PDQ-WASM includes specialized browser utilities for common web application tasks. For complete documentation on browser utilities including duplicate detection, hash checking, and progress tracking:
@@ -259,16 +358,20 @@ Quick overview of available utilities:
 
 ```javascript
 import {
+  getEnvironment,         // ⭐ NEW: Detect runtime environment and get API recommendations
+  generateHashFromBlob,   // ✅ RECOMMENDED: Works in browsers AND workers
+  generateHashFromDataUrl, // Legacy: Browser main thread only
   createHashChecker,      // Hash existence checking with caching
   hammingDistance,        // Hex hash comparison
-  generateHashFromDataUrl, // Hash from data/blob URLs
   detectDuplicatesByHash  // Batch duplicate detection
 } from 'pdq-wasm/browser';
 ```
 
 **Key Features:**
+- **getEnvironment**: ⭐ NEW - Detect runtime environment and get API recommendations
+- **generateHashFromBlob**: ✅ RECOMMENDED - Worker-compatible image hashing (Blob/File input)
+- **generateHashFromDataUrl**: Canvas-based image hashing (browser main thread only)
 - **createHashChecker**: Chainable hash lookup with `.cached()` and `.ignoreInvalid()`
-- **generateHashFromDataUrl**: Canvas-based image hashing (remember to revoke blob URLs!)
 - **detectDuplicatesByHash**: Batch duplicate detection with progress callbacks
 - **hammingDistance**: Convenient hex string comparison
 

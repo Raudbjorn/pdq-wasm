@@ -7,6 +7,96 @@ import { PDQ } from './pdq';
 import type { PDQHash, ImageData } from './types';
 
 /**
+ * Environment detection result
+ */
+export interface RuntimeEnvironment {
+  /** Type of environment detected */
+  type: 'browser' | 'worker' | 'node' | 'unknown';
+  /** Whether the environment supports generateHashFromDataUrl */
+  supportsDataUrl: boolean;
+  /** Whether the environment supports generateHashFromBlob */
+  supportsBlob: boolean;
+  /** Recommended hash generation function name */
+  recommendedAPI: string;
+}
+
+/**
+ * Detect the current runtime environment and recommend the appropriate API
+ *
+ * @returns Environment information and API recommendations
+ *
+ * @example
+ * ```typescript
+ * import { getEnvironment } from 'pdq-wasm/browser';
+ *
+ * const env = getEnvironment();
+ * console.log(`Running in: ${env.type}`);
+ * console.log(`Use: ${env.recommendedAPI}`);
+ *
+ * if (env.supportsBlob) {
+ *   const hash = await generateHashFromBlob(file);
+ * } else if (env.supportsDataUrl) {
+ *   const hash = await generateHashFromDataUrl(dataUrl);
+ * }
+ * ```
+ */
+export function getEnvironment(): RuntimeEnvironment {
+  // Check for Web Worker
+  const isWorker =
+    typeof self !== 'undefined' &&
+    // @ts-ignore - importScripts only exists in workers
+    typeof importScripts === 'function' &&
+    typeof window === 'undefined';
+
+  // Check for browser main thread
+  const isBrowser =
+    typeof window !== 'undefined' &&
+    typeof document !== 'undefined';
+
+  // Check for Node.js
+  const isNode =
+    typeof process !== 'undefined' &&
+    process.versions != null &&
+    process.versions.node != null;
+
+  // Check API availability
+  const supportsBlob =
+    typeof createImageBitmap !== 'undefined' &&
+    typeof OffscreenCanvas !== 'undefined';
+
+  const supportsDataUrl =
+    typeof window !== 'undefined' &&
+    typeof document !== 'undefined' &&
+    typeof Image !== 'undefined';
+
+  // Determine environment type
+  let type: RuntimeEnvironment['type'];
+  let recommendedAPI: string;
+
+  if (isWorker) {
+    type = 'worker';
+    recommendedAPI = supportsBlob ? 'generateHashFromBlob()' : 'Not supported - upgrade browser';
+  } else if (isBrowser) {
+    type = 'browser';
+    // Prefer blob API for better performance and worker compatibility
+    recommendedAPI = supportsBlob ? 'generateHashFromBlob()' : 'generateHashFromDataUrl()';
+  } else if (isNode) {
+    type = 'node';
+    recommendedAPI = 'PDQ.hash() with image buffer';
+  } else {
+    type = 'unknown';
+    recommendedAPI = 'Unknown environment';
+  }
+
+  return {
+    type,
+    supportsDataUrl,
+    supportsBlob,
+    recommendedAPI,
+  };
+}
+
+/**
  * Result from a hash existence lookup
  */
 export interface HashLookupResult {
@@ -333,25 +423,34 @@ export interface PDQImageData {
 
 /**
  * Generate PDQ hash from a Blob or File in a worker-compatible way
- * Uses createImageBitmap and OffscreenCanvas, which work in both browsers and workers
  *
- * Browser Support:
+ * **✅ RECOMMENDED** - Works in both browser main thread and Web Workers
+ *
+ * Uses modern browser APIs (createImageBitmap + OffscreenCanvas) that work across contexts.
+ * This is the **preferred API** for most use cases, especially if you need Web Worker support.
+ *
+ * **For Workers:** This is the ONLY API that works - {@link generateHashFromDataUrl} will fail.
+ *
+ * **Browser Support:**
  * - Chrome 69+ (full support)
  * - Firefox 105+ (OffscreenCanvas added in 105)
  * - Safari 16.4+ (OffscreenCanvas support)
  * - Edge 79+
  *
- * For older browsers, use generateHashFromDataUrl() as fallback.
+ * **For older browsers** (main thread only), use {@link generateHashFromDataUrl} as fallback.
  *
  * @param blob Image blob or file
- * @returns Hex-encoded PDQ hash
+ * @returns Hex-encoded PDQ hash (64 character hex string)
  * @throws {Error} If createImageBitmap or OffscreenCanvas unavailable
  * @throws {Error} If image fails to decode or has invalid dimensions
- * @throws {Error} If image exceeds maximum dimension limit
+ * @throws {Error} If image exceeds maximum dimension limit (10,000px)
+ *
+ * @see {@link generateHashFromDataUrl} for legacy browser fallback (main thread only)
+ * @see {@link getEnvironment} to detect runtime environment and choose the right API
  *
  * @example
  * ```typescript
- * // In a Web Worker
+ * // ✅ In a Web Worker (PREFERRED)
  * self.onmessage = async (event) => {
  *   const file = event.data.file;
  *   const hash = await generateHashFromBlob(file);
@@ -361,9 +460,19 @@ export interface PDQImageData {
  *
  * @example
  * ```typescript
- * // In a browser (also works)
- * const file = input.files[0];
+ * // ✅ In a browser main thread (also works)
+ * const fileInput = document.querySelector('input[type="file"]');
+ * const file = fileInput.files[0];
  * const hash = await generateHashFromBlob(file);
+ * console.log('Hash:', hash);
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // ✅ With fetch API
+ * const response = await fetch('image.jpg');
+ * const blob = await response.blob();
+ * const hash = await generateHashFromBlob(blob);
  * ```
  */
 export async function generateHashFromBlob(blob: Blob): Promise<string> {
@@ -371,7 +480,8 @@ export async function generateHashFromBlob(blob: Blob): Promise<string> {
   if (typeof createImageBitmap === 'undefined') {
     throw new Error(
       'createImageBitmap is not available in this environment. ' +
-      'Use generateHashFromDataUrl in older browsers.'
+      'For older browsers (main thread), use generateHashFromDataUrl() instead. ' +
+      'Minimum browser versions: Chrome 69+, Firefox 105+, Safari 16.4+, Edge 79+.'
     );
   }
 
@@ -379,7 +489,8 @@ export async function generateHashFromBlob(blob: Blob): Promise<string> {
   if (typeof OffscreenCanvas === 'undefined') {
     throw new Error(
       'OffscreenCanvas is not available in this environment. ' +
-      'Use generateHashFromDataUrl as a fallback.'
+      'For older browsers (main thread), use generateHashFromDataUrl() as a fallback. ' +
+      'Minimum browser versions: Chrome 69+, Firefox 105+, Safari 16.4+, Edge 79+.'
     );
   }
 
@@ -458,7 +569,20 @@ export async function generateHashFromBlob(blob: Blob): Promise<string> {
 
 /**
  * Generate PDQ perceptual hash from an image data URL or blob URL
- * Browser-only function that uses DOM APIs (Image, Canvas) for image processing
+ *
+ * **⚠️ BROWSER MAIN THREAD ONLY** - Requires DOM APIs (Image, Canvas, document)
+ *
+ * **For Web Workers:** Use {@link generateHashFromBlob} instead, which works in both
+ * browsers and workers using modern APIs (createImageBitmap + OffscreenCanvas).
+ *
+ * **Migration Guide:**
+ * ```typescript
+ * // ❌ DON'T use in workers (will throw error)
+ * const hash = await generateHashFromDataUrl(dataUrl);
+ *
+ * // ✅ DO use in workers
+ * const hash = await generateHashFromBlob(file); // file is Blob/File
+ * ```
  *
  * **Auto-cleanup:** Blob URLs can be automatically revoked after processing using the
  * `autoRevoke` parameter to prevent memory leaks. Useful when you don't need the blob
@@ -468,9 +592,12 @@ export async function generateHashFromBlob(blob: Blob): Promise<string> {
  * @param autoRevoke - Automatically revoke blob URLs after processing (default: false)
  * @returns Promise resolving to 64-character hex hash string
  *
- * @throws Error if called in non-browser environment
+ * @throws Error if called in non-browser main thread environment (e.g., Web Worker, Node.js)
  * @throws Error if image fails to load
  * @throws Error if canvas context cannot be obtained
+ *
+ * @see {@link generateHashFromBlob} for worker-compatible alternative
+ * @see {@link getEnvironment} to detect runtime environment and choose the right API
  *
  * @example
  * ```typescript
@@ -502,11 +629,17 @@ export async function generateHashFromDataUrl(
   dataUrl: string,
   autoRevoke: boolean = false
 ): Promise<string> {
-  // Check if we're in a browser environment
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
+  // Check if we're in a browser environment using the centralized environment detection
+  const env = getEnvironment();
+
+  if (env.type !== 'browser') {
     throw new Error(
-      'generateHashFromDataUrl requires browser environment. ' +
-      'Cannot generate hashes server-side.'
+      'generateHashFromDataUrl() requires browser main thread (needs DOM APIs). ' +
+      (env.type === 'worker'
+        ? 'For Web Workers, use generateHashFromBlob() instead, which uses worker-compatible APIs (createImageBitmap + OffscreenCanvas). ' +
+          'Example: const hash = await generateHashFromBlob(file);'
+        : 'For Node.js, use the core PDQ API with image buffers. ') +
+      'See examples/worker/README.md for more details.'
     );
   }
 
