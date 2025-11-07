@@ -232,7 +232,7 @@ If you prefer to use a CDN:
 
 - **unpkg** (default): `https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm`
 - **jsDelivr**: `https://cdn.jsdelivr.net/npm/pdq-wasm@0.3.3/wasm/pdq.wasm`
-- **unpkg (latest)**: `https://unpkg.com/pdq-wasm@latest/wasm/pdq.wasm`
+- **unpkg (latest)**: `https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm`
 
 You can also specify a custom CDN:
 ```javascript

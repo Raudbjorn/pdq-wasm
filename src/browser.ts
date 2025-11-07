@@ -332,6 +332,131 @@ export interface PDQImageData {
 }
 
 /**
+ * Generate PDQ hash from a Blob or File in a worker-compatible way
+ * Uses createImageBitmap and OffscreenCanvas, which work in both browsers and workers
+ *
+ * Browser Support:
+ * - Chrome 69+ (full support)
+ * - Firefox 105+ (OffscreenCanvas added in 105)
+ * - Safari 16.4+ (OffscreenCanvas support)
+ * - Edge 79+
+ *
+ * For older browsers, use generateHashFromDataUrl() as fallback.
+ *
+ * @param blob Image blob or file
+ * @returns Hex-encoded PDQ hash
+ * @throws {Error} If createImageBitmap or OffscreenCanvas unavailable
+ * @throws {Error} If image fails to decode or has invalid dimensions
+ * @throws {Error} If image exceeds maximum dimension limit
+ *
+ * @example
+ * ```typescript
+ * // In a Web Worker
+ * self.onmessage = async (event) => {
+ *   const file = event.data.file;
+ *   const hash = await generateHashFromBlob(file);
+ *   self.postMessage({ hash });
+ * };
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // In a browser (also works)
+ * const file = input.files[0];
+ * const hash = await generateHashFromBlob(file);
+ * ```
+ */
+export async function generateHashFromBlob(blob: Blob): Promise<string> {
+  // Check if createImageBitmap is available (works in both browsers and workers)
+  if (typeof createImageBitmap === 'undefined') {
+    throw new Error(
+      'createImageBitmap is not available in this environment. ' +
+      'Use generateHashFromDataUrl in older browsers.'
+    );
+  }
+
+  // Check if OffscreenCanvas is available
+  if (typeof OffscreenCanvas === 'undefined') {
+    throw new Error(
+      'OffscreenCanvas is not available in this environment. ' +
+      'Use generateHashFromDataUrl as a fallback.'
+    );
+  }
+
+  // Create an ImageBitmap from the blob with proper error handling
+  let imageBitmap: ImageBitmap;
+  try {
+    imageBitmap = await createImageBitmap(blob);
+  } catch (error) {
+    throw new Error(
+      `Failed to decode image: ${error instanceof Error ? error.message : 'Unknown error'}. ` +
+      'The file may be corrupted or in an unsupported format.'
+    );
+  }
+
+  // Validate image dimensions
+  if (!imageBitmap.width || !imageBitmap.height) {
+    imageBitmap.close();
+    throw new Error('Image has invalid dimensions (width or height is 0)');
+  }
+
+  // Add size limits to prevent DOS attacks via huge images
+  const MAX_DIMENSION = 10000; // 10,000 pixels max on any side
+  if (imageBitmap.width > MAX_DIMENSION || imageBitmap.height > MAX_DIMENSION) {
+    imageBitmap.close();
+    throw new Error(
+      `Image too large: ${imageBitmap.width}x${imageBitmap.height} pixels. ` +
+      `Maximum allowed: ${MAX_DIMENSION}x${MAX_DIMENSION}`
+    );
+  }
+
+  try {
+    // Create an OffscreenCanvas to extract pixel data
+    // NOTE: For performance optimization in high-throughput scenarios, consider
+    // caching and reusing a single OffscreenCanvas and 2D context. However, this
+    // would require careful size management and thread safety considerations in workers.
+    const canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      throw new Error('Could not get 2D context from OffscreenCanvas');
+    }
+
+    // Draw the image to the canvas
+    ctx.drawImage(imageBitmap, 0, 0);
+
+    // Get image data (RGBA format)
+    const imageData = ctx.getImageData(0, 0, imageBitmap.width, imageBitmap.height);
+
+    // Convert RGBA to RGB (PDQ only supports RGB or grayscale)
+    const rgbData = new Uint8Array(imageBitmap.width * imageBitmap.height * 3);
+    for (let i = 0, j = 0; i < imageData.data.length; i += 4, j += 3) {
+      rgbData[j] = imageData.data[i];       // R
+      rgbData[j + 1] = imageData.data[i + 1]; // G
+      rgbData[j + 2] = imageData.data[i + 2]; // B
+      // Skip alpha channel
+    }
+
+    // Prepare PDQ image data structure
+    const pdqImageData: ImageData = {
+      data: rgbData,
+      width: imageBitmap.width,
+      height: imageBitmap.height,
+      channels: 3 // RGB
+    };
+
+    // Generate PDQ hash
+    const result = PDQ.hash(pdqImageData);
+    return PDQ.toHex(result.hash);
+  } finally {
+    // Clean up the ImageBitmap (check if close() exists for compatibility)
+    if (typeof imageBitmap.close === 'function') {
+      imageBitmap.close();
+    }
+  }
+}
+
+/**
  * Generate PDQ perceptual hash from an image data URL or blob URL
  * Browser-only function that uses DOM APIs (Image, Canvas) for image processing
  *
