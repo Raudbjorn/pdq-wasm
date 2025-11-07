@@ -449,6 +449,7 @@ describe('Browser Utilities', () => {
 
   describe('generateHashFromDataUrl', () => {
     // Skip in Node.js environment - this requires real DOM and is tested in Playwright E2E tests
+    // See: __tests__/e2e/duplicate-detection.spec.ts for browser environment coverage
     it.skip('should generate hash from data URL', async () => {
       const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
       const hash = await generateHashFromDataUrl(dataUrl);
@@ -476,6 +477,7 @@ describe('Browser Utilities', () => {
     });
 
     // Skip in Node.js environment - this requires real DOM and is tested in Playwright E2E tests
+    // See: __tests__/e2e/duplicate-detection.spec.ts for browser environment coverage
     it.skip('should handle image load errors', async () => {
       const invalidUrl = 'invalid://url';
 
@@ -544,6 +546,7 @@ describe('Browser Utilities', () => {
     });
 
     // Skip in Node.js environment - this requires real DOM and is tested in Playwright E2E tests
+    // See: __tests__/e2e/duplicate-detection.spec.ts for browser environment coverage
     it.skip('should detect identical images as duplicates', async () => {
       // Create files with same preview (should generate same hash)
       const files: FileWithHash[] = [
