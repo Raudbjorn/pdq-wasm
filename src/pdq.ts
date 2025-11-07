@@ -190,7 +190,8 @@ export class PDQ {
         if (!options.wasmUrl) {
           // Use unpkg.com CDN - pins to current package version for stability
           // Users can also use @latest or a different CDN (jsDelivr, etc.)
-          const version = '0.3.3'; // TODO: Auto-sync with package.json version
+          const pkg = require('../package.json');
+          const version = pkg.version;
           options.wasmUrl = `https://unpkg.com/pdq-wasm@${version}/wasm/pdq.wasm`;
           this.log(`No wasmUrl provided, using CDN: ${options.wasmUrl}`);
           this.log('For production, consider self-hosting the WASM files for better reliability');

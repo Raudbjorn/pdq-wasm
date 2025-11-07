@@ -16,13 +16,13 @@ Create a worker file (`pdq-worker.js`):
 
 ```javascript
 // Import PDQ (using importScripts for classic workers)
-importScripts('https://unpkg.com/pdq-wasm@0.3.3/dist/browser.js');
+importScripts('https://unpkg.com/pdq-wasm@0.3.4/dist/browser.js');
 
 // Initialize PDQ in the worker, with error handling
 async function init() {
   try {
     await PDQ.initWorker({
-      wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm'
+      wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.4/wasm/pdq.wasm'
     });
     self.postMessage({ type: 'ready' });
   } catch (error) {
@@ -172,7 +172,7 @@ import { PDQ, generateHashFromBlob } from 'pdq-wasm';
 
 // Initialize - automatically uses dynamic import in ES module workers
 await PDQ.initWorker({
-  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm'
+  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.4/wasm/pdq.wasm'
 });
 
 self.onmessage = async (event) => {
@@ -214,7 +214,7 @@ You can enable logging to debug worker initialization:
 
 ```javascript
 await PDQ.initWorker({
-  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm',
+  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.4/wasm/pdq.wasm',
   logger: (msg) => console.log('[PDQ Worker]', msg)
 });
 // Logs:
