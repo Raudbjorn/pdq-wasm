@@ -88,25 +88,38 @@
           statusDiv.innerHTML = '<div class="status">✓ Worker ready</div>';
           break;
 
-        case 'hash-result':
+        case 'hash-result': {
           const resultDiv = document.createElement('div');
           resultDiv.className = 'hash-result';
-          resultDiv.innerHTML = `
-            <strong>${filename}</strong>
-            <div class="hash">${hash}</div>
-          `;
+
+          const strong = document.createElement('strong');
+          strong.textContent = filename;
+
+          const hashDiv = document.createElement('div');
+          hashDiv.className = 'hash';
+          hashDiv.textContent = hash;
+
+          resultDiv.appendChild(strong);
+          resultDiv.appendChild(hashDiv);
           resultsDiv.appendChild(resultDiv);
           break;
+        }
 
-        case 'error':
+        case 'error': {
           const errorDiv = document.createElement('div');
           errorDiv.className = 'hash-result error';
-          errorDiv.innerHTML = `
-            <strong>Error${filename ? ': ' + filename : ''}</strong>
-            <div>${error}</div>
-          `;
+
+          const strong = document.createElement('strong');
+          strong.textContent = `Error${filename ? ': ' + filename : ''}`;
+
+          const errorMsgDiv = document.createElement('div');
+          errorMsgDiv.textContent = error;
+
+          errorDiv.appendChild(strong);
+          errorDiv.appendChild(errorMsgDiv);
           resultsDiv.appendChild(errorDiv);
           break;
+        }
       }
     };
 
@@ -114,6 +127,9 @@
       console.error('Worker error:', error);
       statusDiv.innerHTML = '<div class="status" style="background: #ffebee; color: #c62828;">✗ Worker error: ' + error.message + '</div>';
     };
+
+    // Initialize the worker first
+    worker.postMessage({ type: 'init' });
 
     // Handle file selection
     fileInput.addEventListener('change', async (event) => {
@@ -134,9 +150,6 @@
         });
       }
     });
-
-    // Initialize the worker
-    worker.postMessage({ type: 'init' });
   </script>
 </body>
 </html>

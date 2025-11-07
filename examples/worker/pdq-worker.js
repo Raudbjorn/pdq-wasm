@@ -90,6 +90,3 @@ self.onmessage = async (event) => {
       });
   }
 };
-
-// Auto-initialize
-init();

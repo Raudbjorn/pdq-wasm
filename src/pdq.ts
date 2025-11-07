@@ -308,7 +308,12 @@ export class PDQ {
     this.initPromise = (async () => {
       this.log('Initializing PDQ WASM module in Web Worker...');
 
-      const wasmJsUrl = options.wasmJsUrl || options.wasmUrl.replace(/\.wasm$/, '.js');
+      // Derive JS glue code URL from WASM URL if not provided
+      const wasmJsUrl = options.wasmJsUrl || (
+        options.wasmUrl.endsWith('.wasm')
+          ? options.wasmUrl.replace(/\.wasm$/, '.js')
+          : options.wasmUrl + '.js'
+      );
 
       this.log(`Loading WASM module from: ${options.wasmUrl}`);
       this.log(`Loading WASM JS glue code from: ${wasmJsUrl}`);

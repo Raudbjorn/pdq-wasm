@@ -18,29 +18,48 @@ Create a worker file (`pdq-worker.js`):
 // Import PDQ (using importScripts for classic workers)
 importScripts('https://unpkg.com/pdq-wasm@0.3.3/dist/browser.js');
 
-// Initialize PDQ in the worker
+// Initialize PDQ in the worker, with error handling
 async function init() {
-  await PDQ.initWorker({
-    wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm'
-  });
-  self.postMessage({ type: 'ready' });
+  try {
+    await PDQ.initWorker({
+      wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm'
+    });
+    self.postMessage({ type: 'ready' });
+  } catch (error) {
+    self.postMessage({
+      type: 'error',
+      error: `Failed to initialize: ${error.message}`
+    });
+  }
 }
 
 // Handle messages from main thread
 self.onmessage = async (event) => {
-  const { type, file } = event.data;
+  const { type, data } = event.data;
 
-  if (type === 'hash') {
-    try {
-      const hash = await generateHashFromBlob(file);
-      self.postMessage({ type: 'result', hash });
-    } catch (error) {
-      self.postMessage({ type: 'error', error: error.message });
-    }
+  switch (type) {
+    case 'init':
+      await init();
+      break;
+
+    case 'hash':
+      try {
+        const hash = await generateHashFromBlob(data.file);
+        self.postMessage({
+          type: 'hash-result',
+          hash,
+          filename: data.filename
+        });
+      } catch (error) {
+        self.postMessage({
+          type: 'error',
+          error: error.message,
+          filename: data.filename
+        });
+      }
+      break;
   }
 };
-
-init();
 ```
 
 ### 2. Main Thread
@@ -51,20 +70,30 @@ const worker = new Worker('pdq-worker.js');
 
 // Handle results
 worker.onmessage = (event) => {
-  const { type, hash, error } = event.data;
+  const { type, hash, error, filename } = event.data;
 
-  if (type === 'ready') {
-    console.log('Worker is ready');
-  } else if (type === 'result') {
-    console.log('Hash:', hash);
-  } else if (type === 'error') {
-    console.error('Error:', error);
+  switch (type) {
+    case 'ready':
+      console.log('Worker ready!');
+      break;
+    case 'hash-result':
+      console.log('Hash:', hash, 'File:', filename);
+      break;
+    case 'error':
+      console.error('Error:', error, 'File:', filename);
+      break;
   }
 };
 
+// Initialize the worker first
+worker.postMessage({ type: 'init' });
+
 // Send file to worker
 const file = document.querySelector('input[type="file"]').files[0];
-worker.postMessage({ type: 'hash', file });
+worker.postMessage({
+  type: 'hash',
+  data: { file, filename: file.name }
+});
 ```
 
 ## Running the Example
