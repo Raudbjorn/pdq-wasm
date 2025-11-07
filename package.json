@@ -24,7 +24,8 @@
     "examples",
     "LICENSE",
     "README.md",
-    "BUILDING.md"
+    "BUILDING.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build:wasm": "bash scripts/build-wasm.sh",
