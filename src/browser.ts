@@ -629,15 +629,13 @@ export async function generateHashFromDataUrl(
   dataUrl: string,
   autoRevoke: boolean = false
 ): Promise<string> {
-  // Check if we're in a browser environment
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    // Detect if we're in a Web Worker
-    // @ts-ignore - importScripts only exists in workers
-    const isWorker = typeof self !== 'undefined' && typeof importScripts === 'function';
+  // Check if we're in a browser environment using the centralized environment detection
+  const env = getEnvironment();
 
+  if (env.type !== 'browser') {
     throw new Error(
       'generateHashFromDataUrl() requires browser main thread (needs DOM APIs). ' +
-      (isWorker
+      (env.type === 'worker'
         ? 'For Web Workers, use generateHashFromBlob() instead, which uses worker-compatible APIs (createImageBitmap + OffscreenCanvas). ' +
           'Example: const hash = await generateHashFromBlob(file);'
         : 'For Node.js, use the core PDQ API with image buffers. ') +
