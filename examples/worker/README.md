@@ -127,25 +127,72 @@ Supported in:
 
 ## Advanced: ES Module Workers
 
-For ES module workers, use dynamic import:
+pdq-wasm now supports ES module workers with automatic fallback to dynamic import!
+
+### Option 1: Using importScripts (Classic Workers)
+
+See the main example above. This is the most compatible approach.
+
+### Option 2: ES Module Workers
+
+For ES module workers, `PDQ.initWorker()` automatically falls back to dynamic import:
 
 ```javascript
 // pdq-worker.mjs
-import PDQ from 'pdq-wasm';
+import { PDQ, generateHashFromBlob } from 'pdq-wasm';
 
+// Initialize - automatically uses dynamic import in ES module workers
 await PDQ.initWorker({
-  wasmUrl: '/wasm/pdq.wasm'
+  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm'
 });
 
 self.onmessage = async (event) => {
-  // ... handle messages
+  const { type, file } = event.data;
+
+  if (type === 'hash') {
+    const hash = await generateHashFromBlob(file);
+    self.postMessage({ type: 'result', hash });
+  }
 };
 ```
 
 Main thread:
 
 ```javascript
+// Create ES module worker
 const worker = new Worker('pdq-worker.mjs', { type: 'module' });
+
+worker.onmessage = (event) => {
+  console.log('Hash:', event.data.hash);
+};
+
+// Send file to worker
+const file = document.querySelector('input[type="file"]').files[0];
+worker.postMessage({ type: 'hash', file });
+```
+
+### How It Works
+
+`PDQ.initWorker()` automatically detects the worker environment:
+
+1. **Classic workers**: Uses `importScripts()` to load the WASM glue code
+2. **ES module workers**: Falls back to `import()` when `importScripts` is unavailable
+3. **Custom builds**: Logs detailed error messages if the factory function isn't found
+
+### Logging in Workers
+
+You can enable logging to debug worker initialization:
+
+```javascript
+await PDQ.initWorker({
+  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.3/wasm/pdq.wasm',
+  logger: (msg) => console.log('[PDQ Worker]', msg)
+});
+// Logs:
+// [PDQ Worker] Initializing PDQ WASM module in Web Worker...
+// [PDQ Worker] Loading WASM module from: https://unpkg.com/...
+// [PDQ Worker] Loading via importScripts (classic worker)...
+// [PDQ Worker] PDQ WASM module initialized successfully (Web Worker)
 ```
 
 ## Performance Benefits

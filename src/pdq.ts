@@ -300,6 +300,11 @@ export class PDQ {
       );
     }
 
+    // Apply logger if provided
+    if (options.logger) {
+      this.setLogger(options.logger);
+    }
+
     this.initPromise = (async () => {
       this.log('Initializing PDQ WASM module in Web Worker...');
 
@@ -309,41 +314,64 @@ export class PDQ {
       this.log(`Loading WASM JS glue code from: ${wasmJsUrl}`);
 
       try {
-        // Use importScripts to load the WASM glue code synchronously
-        // This works in classic workers
+        let factory: any;
+
+        // Try classic worker approach first (importScripts)
         // @ts-ignore - importScripts is only available in workers
         if (typeof importScripts === 'function') {
+          this.log('Loading via importScripts (classic worker)...');
           // @ts-ignore - importScripts is only available in workers
           importScripts(wasmJsUrl);
 
           // The glue code should define createPDQModule on the global scope
-          const factory = (self as any).createPDQModule as unknown;
+          factory = (self as any).createPDQModule;
 
           // Validate that the factory function was properly loaded
           if (typeof factory !== 'function') {
+            this.log(
+              `ERROR: createPDQModule function not found on global scope after importing ${wasmJsUrl}. ` +
+              'This may indicate a custom build or incorrect WASM JS glue code. ' +
+              'Ensure that the glue code defines createPDQModule globally. ' +
+              'If you are using a custom build, you may need to expose the factory function as self.createPDQModule.'
+            );
             throw new Error(
-              'createPDQModule function not found after importing script. ' +
-              `Ensure the WASM glue code loaded successfully from: ${wasmJsUrl}`
+              'PDQ WASM initialization failed: createPDQModule is not defined globally. ' +
+              'Check that your WASM JS glue code exposes createPDQModule on the global scope. ' +
+              'See documentation for custom builds.'
             );
           }
-
-          // Initialize with the WASM URL
-          this.module = await factory({
-            locateFile: (path: string) => {
-              if (path.endsWith('.wasm')) {
-                return options.wasmUrl;
-              }
-              return path;
-            }
-          });
-
-          this.log('PDQ WASM module initialized successfully (Web Worker)');
         } else {
-          throw new Error(
-            'importScripts is not available. This might be an ES module worker. ' +
-            'Consider using dynamic import or providing a bundled worker script.'
-          );
+          // ES module worker fallback - try dynamic import
+          this.log('importScripts not available, trying dynamic import (ES module worker)...');
+          try {
+            const module = await import(/* webpackIgnore: true */ wasmJsUrl);
+            factory = module.default || module.createPDQModule;
+
+            if (typeof factory !== 'function') {
+              throw new Error(
+                `ES module at ${wasmJsUrl} does not export createPDQModule or a default factory function`
+              );
+            }
+          } catch (importError) {
+            throw new Error(
+              'Failed to load WASM module in worker. ' +
+              'importScripts is not available and dynamic import failed. ' +
+              `Error: ${importError instanceof Error ? importError.message : String(importError)}`
+            );
+          }
         }
+
+        // Initialize with the WASM URL
+        this.module = await factory({
+          locateFile: (path: string) => {
+            if (path.endsWith('.wasm')) {
+              return options.wasmUrl;
+            }
+            return path;
+          }
+        });
+
+        this.log('PDQ WASM module initialized successfully (Web Worker)');
       } catch (error) {
         const errorMsg = `Failed to load WASM module in worker: ${error instanceof Error ? error.message : String(error)}`;
         this.log(`ERROR: ${errorMsg}`);

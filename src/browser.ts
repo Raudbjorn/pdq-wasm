@@ -412,6 +412,9 @@ export async function generateHashFromBlob(blob: Blob): Promise<string> {
 
   try {
     // Create an OffscreenCanvas to extract pixel data
+    // NOTE: For performance optimization in high-throughput scenarios, consider
+    // caching and reusing a single OffscreenCanvas and 2D context. However, this
+    // would require careful size management and thread safety considerations in workers.
     const canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
     const ctx = canvas.getContext('2d');
 
@@ -444,12 +447,12 @@ export async function generateHashFromBlob(blob: Blob): Promise<string> {
 
     // Generate PDQ hash
     const result = PDQ.hash(pdqImageData);
-    const hexHash = PDQ.toHex(result.hash);
-
-    return hexHash;
+    return PDQ.toHex(result.hash);
   } finally {
-    // Clean up the ImageBitmap
-    imageBitmap.close();
+    // Clean up the ImageBitmap (check if close() exists for compatibility)
+    if (typeof imageBitmap.close === 'function') {
+      imageBitmap.close();
+    }
   }
 }
 
