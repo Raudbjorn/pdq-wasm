@@ -4,7 +4,19 @@
  * Common utilities for PDQ Worker Pool E2E tests
  */
 
-import { Page } from '@playwright/test';
+import { Page, expect } from '@playwright/test';
+
+/**
+ * DOM Element Parsing Helpers
+ * Centralized helper to parse integer values from DOM elements
+ * This pattern handles contexts where document may not exist and provides consistent error handling
+ */
+
+/**
+ * Helper function to parse an element's text content as an integer
+ * Usage in page.evaluate(): parseInt(document.getElementById('id')?.textContent || '0')
+ */
+const parseElement = (id: string) => `parseInt(document.getElementById('${id}')?.textContent || '0')`;
 
 /**
  * Wait for files to be loaded (state-based check)
@@ -101,6 +113,13 @@ export async function resetTest(page: Page) {
 }
 
 /**
+ * Assert that the start button is enabled (uses Playwright's auto-retry)
+ */
+export async function assertStartButtonEnabled(page: Page) {
+  await expect(page.locator('#start-test')).toBeEnabled();
+}
+
+/**
  * Start the processing test
  */
 export async function startTest(page: Page) {
@@ -128,8 +147,7 @@ export async function tryObserveBusyWorkers(page: Page, minBusy = 2, timeout = 2
  */
 export async function injectTestFile(page: Page, file: { name: string; type: string; data: Uint8Array }) {
   await page.evaluate((fileData) => {
-    const blob = new Blob([fileData.data], { type: fileData.type });
-    const file = new File([blob], fileData.name, { type: fileData.type });
-    (window as any).injectTestFile(file);
+    // Pass the object directly as expected by window.injectTestFile
+    (window as any).injectTestFile(fileData);
   }, { ...file, data: Array.from(file.data) });
 }

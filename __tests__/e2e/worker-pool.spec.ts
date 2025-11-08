@@ -9,6 +9,11 @@
  */
 
 import { test, expect } from '@playwright/test';
+import {
+  waitForProcessingComplete,
+  waitForFilesLoaded,
+  assertStartButtonEnabled
+} from './test-helpers';
 
 const WEBAPP_URL = '/__tests__/e2e/webapp/worker.html';
 const WORKER_COUNT = 12;
@@ -79,11 +84,8 @@ test.describe('PDQ Worker Pool E2E', () => {
     // Click start test button
     await page.click('#start-test');
 
-    // STATE-BASED: Wait for files to load (not time-based)
-    await page.waitForFunction(() => {
-      const total = parseInt(document.getElementById('total-files').textContent || '0');
-      return total > 0;
-    }, { timeout: 5000 });
+    // Wait for files to load
+    await waitForFilesLoaded(page);
 
     // Verify files are being processed
     const totalFiles = await page.locator('#total-files').textContent();
@@ -106,15 +108,8 @@ test.describe('PDQ Worker Pool E2E', () => {
       console.log('Workers processed too fast to observe parallel execution (this is OK)');
     }
 
-    // Wait for all processing to complete (with generous timeout)
-    await page.waitForFunction(() => {
-      const processing = parseInt(document.getElementById('processing-files').textContent || '0');
-      const processed = parseInt(document.getElementById('processed-files').textContent || '0');
-      const failed = parseInt(document.getElementById('failed-files').textContent || '0');
-      const total = parseInt(document.getElementById('total-files').textContent || '0');
-
-      return processing === 0 && (processed + failed) === total && total > 0;
-    }, { timeout: 60000 }); // 60 second timeout for processing
+    // Wait for all processing to complete
+    await waitForProcessingComplete(page, 60000);
 
     // Verify final results
     const results = await page.evaluate(() => window.getResults());
@@ -618,20 +613,172 @@ test.describe('PDQ Worker Pool E2E', () => {
     const width = await progressFill.evaluate(el => el.style.width);
     expect(width).toBe('0%');
 
-    // FALLBACK: Use setTimeout if button state isn't updated properly in reset
-    // Try waiting for button to be enabled, but don't fail the test if it's not
-    const buttonEnabled = await page.locator('#start-test').isEnabled().catch(() => false);
-    if (!buttonEnabled) {
-      console.log('Note: Start button not re-enabled after reset (may need HTML fix)');
-      // Give it a moment with setTimeout fallback
-      await page.waitForTimeout(500);
-    }
+    // Start button should be enabled for a clean reset (uses Playwright's auto-retry)
+    await assertStartButtonEnabled(page);
+  });
+});
 
-    // Check button state after potential delay
-    const finalButtonState = await page.locator('#start-test').isEnabled();
-    console.log(`Start button enabled after reset: ${finalButtonState}`);
+// New test suite for 4-worker batch processing
+test.describe('PDQ Worker Pool E2E - Batch Processing', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('http://localhost:3030/__tests__/e2e/webapp/worker-batch.html');
+    await page.waitForLoadState('networkidle');
 
-    // Should be enabled for a clean reset
-    expect(finalButtonState).toBe(true);
+    // Wait for workers to initialize
+    await page.waitForFunction(() => {
+      const startButton = document.getElementById('start-test') as HTMLButtonElement;
+      return startButton && !startButton.disabled;
+    }, { timeout: 30000 });
+  });
+
+  test('should process files in batches of 3 with 4 workers', async ({ page }) => {
+    console.log('Testing batch processing...');
+
+    // Start test
+    await page.click('#start-test');
+
+    // Wait for files to load
+    await page.waitForFunction(() => {
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      return total > 0;
+    }, { timeout: 5000 });
+
+    const totalFiles = await page.locator('#total-files').textContent();
+    const total = parseInt(totalFiles || '0');
+    console.log(`Total files to process: ${total}`);
+
+    // Track batch progression
+    const batchProgression = [];
+
+    // Monitor batch changes
+    let lastBatch = 0;
+    const checkInterval = setInterval(async () => {
+      try {
+        const currentBatchNum = await page.evaluate(() => {
+          return parseInt(document.getElementById('current-batch')?.textContent || '0');
+        });
+
+        if (currentBatchNum > lastBatch) {
+          batchProgression.push(currentBatchNum);
+          lastBatch = currentBatchNum;
+          console.log(`Batch ${currentBatchNum} started`);
+        }
+      } catch (e) {
+        // Ignore errors during monitoring
+      }
+    }, 100);
+
+    // Wait for processing to complete
+    await page.waitForFunction(() => {
+      const processing = parseInt(document.getElementById('processing-files')?.textContent || '0');
+      const processed = parseInt(document.getElementById('processed-files')?.textContent || '0');
+      const failed = parseInt(document.getElementById('failed-files')?.textContent || '0');
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      return processing === 0 && (processed + failed) === total && total > 0;
+    }, { timeout: 30000 });
+
+    clearInterval(checkInterval);
+
+    const results = await page.evaluate(() => (window as any).getResults());
+
+    console.log('Batch processing complete:', results);
+    console.log('Batch progression:', batchProgression);
+
+    // Verify results
+    expect(results.processed).toBeGreaterThan(0);
+    expect(results.processing).toBe(0);
+    expect(results.processed + results.failed).toBe(results.totalFiles);
+
+    // Verify batch processing occurred (should have processed in batches)
+    expect(results.currentBatch).toBeGreaterThan(0);
+
+    // With 12 files and batch size 3, we should have 4 batches
+    expect(results.currentBatch).toBe(4);
+
+    console.log(`Total batches: ${results.currentBatch}`);
+    console.log(`Avg time per file: ${results.avgTime}ms`);
+  });
+
+  test('should use max 4 workers in batch mode', async ({ page }) => {
+    console.log('Testing worker usage in batch mode...');
+
+    // Start test
+    await page.click('#start-test');
+
+    // Wait for processing to complete
+    await page.waitForFunction(() => {
+      const processing = parseInt(document.getElementById('processing-files')?.textContent || '0');
+      const processed = parseInt(document.getElementById('processed-files')?.textContent || '0');
+      const failed = parseInt(document.getElementById('failed-files')?.textContent || '0');
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      return processing === 0 && (processed + failed) === total && total > 0;
+    }, { timeout: 30000 });
+
+    // Check worker statistics
+    const workerUsage = await page.evaluate(() => {
+      return Array.from((window as any).workerStats.values()).map((stat: any) => ({
+        id: stat.id,
+        processed: stat.processed,
+        errors: stat.errors
+      }));
+    });
+
+    console.log('Worker usage:', workerUsage);
+
+    // Verify we have exactly 4 workers
+    expect(workerUsage.length).toBe(4);
+
+    // Each worker should have processed some files
+    const activeWorkers = workerUsage.filter((w: any) => w.processed > 0);
+    console.log(`Active workers: ${activeWorkers.length} / 4`);
+
+    // At least some workers should be active (batch size allows up to 3)
+    expect(activeWorkers.length).toBeGreaterThan(0);
+    expect(activeWorkers.length).toBeLessThanOrEqual(4);
+  });
+
+  test('should process batches sequentially', async ({ page }) => {
+    console.log('Testing sequential batch processing...');
+
+    // Start test
+    await page.click('#start-test');
+
+    // Wait for first batch to start
+    await page.waitForFunction(() => {
+      const currentBatch = parseInt(document.getElementById('current-batch')?.textContent || '0');
+      return currentBatch > 0;
+    }, { timeout: 5000 });
+
+    // Monitor concurrent processing count
+    let maxConcurrent = 0;
+    const monitorInterval = setInterval(async () => {
+      try {
+        const processing = await page.evaluate(() => {
+          return parseInt(document.getElementById('processing-files')?.textContent || '0');
+        });
+        if (processing > maxConcurrent) {
+          maxConcurrent = processing;
+        }
+      } catch (e) {
+        // Ignore errors during monitoring
+      }
+    }, 50);
+
+    // Wait for completion
+    await page.waitForFunction(() => {
+      const processing = parseInt(document.getElementById('processing-files')?.textContent || '0');
+      const processed = parseInt(document.getElementById('processed-files')?.textContent || '0');
+      const failed = parseInt(document.getElementById('failed-files')?.textContent || '0');
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      return processing === 0 && (processed + failed) === total && total > 0;
+    }, { timeout: 30000 });
+
+    clearInterval(monitorInterval);
+
+    console.log(`Max concurrent files: ${maxConcurrent}`);
+
+    // Batch size is 3, so max concurrent should be <= 3
+    expect(maxConcurrent).toBeLessThanOrEqual(3);
+    expect(maxConcurrent).toBeGreaterThan(0);
   });
 });

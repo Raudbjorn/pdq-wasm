@@ -1,15 +1,16 @@
-const WORKER_COUNT = 12;
-const FILES_PER_WORKER = 3; // Target files-per-worker ratio for workload generation
+const WORKER_COUNT = 4;
+const BATCH_SIZE = 3; // Process 3 files at a time
 const workers = [];
 const workerStats = new Map();
 let testFiles = [];
-let totalFilesCount = 0; // Track initial total for accurate progress calculation
+let totalFilesCount = 0;
 let processedCount = 0;
 let failedCount = 0;
 let processingCount = 0;
+let currentBatch = 0;
 let startTime = 0;
 let hashTimes = [];
-let errorMessages = []; // Track error messages for testing
+let isProcessing = false;
 
 // Initialize worker pool
 async function initWorkers() {
@@ -47,13 +48,6 @@ async function initWorkers() {
 
     worker.onerror = (error) => {
       console.error(`Worker ${i} error:`, error);
-      console.error(`Worker ${i} error details:`, {
-        message: error.message,
-        filename: error.filename,
-        lineno: error.lineno,
-        colno: error.colno,
-        error: error.error
-      });
       updateWorkerUI(i, 'error', `Error: ${error.message || 'Unknown'}`);
     };
 
@@ -63,7 +57,7 @@ async function initWorkers() {
     workers.push(worker);
   }
 
-  console.log(`Initialized ${WORKER_COUNT} workers`);
+  console.log(`Initialized ${WORKER_COUNT} workers (batch mode)`);
 }
 
 function handleWorkerMessage(workerId, data) {
@@ -89,8 +83,8 @@ function handleWorkerMessage(workerId, data) {
       updateWorkerUI(workerId, 'idle', `Done: ${filename}`);
       updateStats();
 
-      // Process next file if available
-      processNextFile(workerId);
+      // Check if current batch is complete
+      checkBatchComplete();
       break;
 
     case 'error':
@@ -100,18 +94,58 @@ function handleWorkerMessage(workerId, data) {
       workerStats.get(workerId).status = 'error';
       workerStats.get(workerId).currentFile = null;
 
-      // Track error message for testing
-      const errorMsg = `Worker ${workerId}: ${filename || 'unknown'}: ${error}`;
-      errorMessages.push(errorMsg);
-      console.error(errorMsg);
+      console.error(`Worker ${workerId}: ${filename || 'unknown'}: ${error}`);
 
       updateWorkerUI(workerId, 'error', `Error: ${error}`);
       updateStats();
 
-      // Process next file despite error
-      setTimeout(() => processNextFile(workerId), 1000);
+      // Check if current batch is complete (even with errors)
+      checkBatchComplete();
       break;
   }
+}
+
+function checkBatchComplete() {
+  // If no files are currently processing, start next batch
+  if (processingCount === 0 && testFiles.length > 0 && isProcessing) {
+    processNextBatch();
+  } else if (processingCount === 0 && testFiles.length === 0) {
+    // All done
+    isProcessing = false;
+    console.log('All batches processed!');
+    const totalTime = Date.now() - startTime;
+    console.log(`Total time: ${totalTime}ms`);
+    console.log(`Processed: ${processedCount}, Failed: ${failedCount}`);
+  }
+}
+
+function processNextBatch() {
+  if (testFiles.length === 0 || !isProcessing) {
+    return;
+  }
+
+  currentBatch++;
+  const batchFiles = testFiles.splice(0, BATCH_SIZE);
+
+  console.log(`Processing batch ${currentBatch} (${batchFiles.length} files)`);
+  document.getElementById('current-batch').textContent = currentBatch;
+
+  // Assign files to workers
+  batchFiles.forEach((file, index) => {
+    const workerId = index % WORKER_COUNT;
+    processingCount++;
+
+    workerStats.get(workerId).status = 'busy';
+    workerStats.get(workerId).currentFile = file.name;
+
+    updateWorkerUI(workerId, 'busy', `Hashing: ${file.name}`);
+    updateStats();
+
+    workers[workerId].postMessage({
+      type: 'hash',
+      data: { file: file.blob, filename: file.name }
+    });
+  });
 }
 
 function checkAllWorkersReady() {
@@ -141,6 +175,7 @@ function addHashResult(filename, hash, workerId, duration) {
     <div>
       <span class="hash-filename">${filename}</span>
       <span class="hash-worker">W${workerId + 1}</span>
+      <span class="hash-worker">Batch ${currentBatch}</span>
       <span class="hash-worker">${duration}ms</span>
     </div>
     <span class="hash-value">${hash}</span>
@@ -166,33 +201,6 @@ function updateStats() {
   document.getElementById('progress-fill').style.width = `${progress}%`;
 }
 
-function processNextFile(workerId) {
-  if (testFiles.length === 0) {
-    // Check if all done
-    if (processingCount === 0) {
-      console.log('All files processed!');
-      const totalTime = Date.now() - startTime;
-      console.log(`Total time: ${totalTime}ms`);
-      console.log(`Processed: ${processedCount}, Failed: ${failedCount}`);
-    }
-    return;
-  }
-
-  const file = testFiles.shift();
-  processingCount++;
-
-  workerStats.get(workerId).status = 'busy';
-  workerStats.get(workerId).currentFile = file.name;
-
-  updateWorkerUI(workerId, 'busy', `Hashing: ${file.name}`);
-  updateStats();
-
-  workers[workerId].postMessage({
-    type: 'hash',
-    data: { file: file.blob, filename: file.name }
-  });
-}
-
 window.startTest = async function() {
   // Load test files
   const fileNames = [
@@ -204,16 +212,19 @@ window.startTest = async function() {
 
   document.getElementById('start-test').disabled = true;
   testFiles = [];
-  window.testFiles = testFiles; // Re-expose after reset
+  window.testFiles = testFiles;
   processedCount = 0;
   failedCount = 0;
   processingCount = 0;
+  currentBatch = 0;
   hashTimes = [];
   startTime = Date.now();
+  isProcessing = true;
   document.getElementById('hash-list').innerHTML = '';
+  document.getElementById('current-batch').textContent = '0';
 
-  // Generate test set - replicate files to create workload
-  const replicaCount = Math.ceil(WORKER_COUNT * FILES_PER_WORKER / fileNames.length);
+  // Generate test set - load 12 files (3 batches of 4 workers)
+  const replicaCount = 3;
 
   for (let i = 0; i < replicaCount; i++) {
     for (const fileName of fileNames) {
@@ -233,83 +244,45 @@ window.startTest = async function() {
   // Set initial total count for accurate progress calculation
   totalFilesCount = testFiles.length;
   document.getElementById('total-files').textContent = totalFilesCount;
-  console.log(`Loaded ${totalFilesCount} files for processing`);
+  console.log(`Loaded ${totalFilesCount} files for batch processing`);
 
-  // Start processing - distribute to all workers
-  for (let i = 0; i < Math.min(WORKER_COUNT, totalFilesCount); i++) {
-    processNextFile(i);
-  }
+  // Start processing first batch
+  processNextBatch();
 };
 
 window.resetTest = function() {
   testFiles = [];
-  window.testFiles = testFiles; // Re-expose after reset
-  totalFilesCount = 0; // Reset total file count
+  window.testFiles = testFiles;
+  totalFilesCount = 0;
   processedCount = 0;
   failedCount = 0;
   processingCount = 0;
+  currentBatch = 0;
   hashTimes = [];
-  errorMessages = [];
   startTime = 0;
+  isProcessing = false;
   document.getElementById('hash-list').innerHTML = '';
   document.getElementById('total-files').textContent = '0';
+  document.getElementById('current-batch').textContent = '0';
   updateStats();
   document.getElementById('progress-fill').style.width = '0%';
-  document.getElementById('start-test').disabled = false; // Re-enable start button
+  document.getElementById('start-test').disabled = false;
 };
 
 // Expose for E2E tests
 window.workers = workers;
 window.workerStats = workerStats;
-window.testFiles = testFiles; // Expose testFiles for dynamic test injection
+window.testFiles = testFiles;
 window.getResults = () => ({
   totalFiles: totalFilesCount,
   processed: processedCount,
   failed: failedCount,
   processing: processingCount,
+  currentBatch: currentBatch,
   avgTime: hashTimes.length > 0 ? Math.round(hashTimes.reduce((a, b) => a + b, 0) / hashTimes.length) : 0,
   totalTime: startTime > 0 ? Date.now() - startTime : 0
 });
 
-/**
- * Inject a test file into the processing queue (for error testing)
- * @param {Object} file - File object with name, type, and data properties
- */
-window.injectTestFile = function(file) {
-  const blob = new Blob([file.data], { type: file.type });
-  testFiles.push({
-    name: file.name,
-    blob
-  });
-  // Increment total file count and update display
-  totalFilesCount++;
-  document.getElementById('total-files').textContent = totalFilesCount.toString();
-};
-
-/**
- * Get all error messages collected during processing
- * @returns {string[]} Array of error messages
- */
-window.getErrorMessages = () => errorMessages;
-
-/**
- * Manually trigger processing for any remaining files in the queue
- * Useful after dynamically injecting files when workers might be idle
- */
-window.triggerProcessing = function() {
-  if (testFiles.length === 0) {
-    return;
-  }
-
-  // Find idle workers and assign them files
-  for (let i = 0; i < WORKER_COUNT && testFiles.length > 0; i++) {
-    const stat = workerStats.get(i);
-    if (stat && stat.status === 'idle') {
-      processNextFile(i);
-    }
-  }
-};
-
 // Initialize workers on page load
 initWorkers();
-console.log('Worker pool initialized');
+console.log('Worker pool initialized (batch mode)');
