@@ -16,12 +16,15 @@ import type {
   LoggerFunction,
 } from './types';
 
+// Type for the Emscripten module factory function
+type PDQModuleFactory = (options?: any) => Promise<PDQWasmModule>;
+
 // Import the WASM module factory
 // This will be resolved differently in Node.js vs browser
-let createPDQModuleFactory: any = null;
+let createPDQModuleFactory: PDQModuleFactory | null = null;
 
 // Lazy loader for Node.js environment - deferred to avoid require() in ES modules
-function getWasmFactory(): any {
+function getWasmFactory(): PDQModuleFactory | null {
   if (createPDQModuleFactory !== null) {
     return createPDQModuleFactory;
   }
@@ -259,7 +262,19 @@ export class PDQ {
           throw new Error(errorMsg);
         }
 
-        this.module = await factory(options);
+        // In Node.js, provide locateFile to resolve WASM file path correctly
+        const path = require('path');
+        const wasmPath = path.join(__dirname, '..', 'wasm', 'pdq.wasm');
+
+        this.module = await factory({
+          ...options,
+          locateFile: (filename: string) => {
+            if (filename.endsWith('.wasm')) {
+              return wasmPath;
+            }
+            return filename;
+          }
+        });
         this.log('PDQ WASM module initialized successfully (Node.js)');
       }
     })();

@@ -469,7 +469,7 @@ describe('Browser Utilities', () => {
       const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
 
       await expect(generateHashFromDataUrl(dataUrl)).rejects.toThrow(
-        'generateHashFromDataUrl requires browser environment'
+        'generateHashFromDataUrl() requires browser main thread'
       );
 
       (global as any).window = originalWindow;
