@@ -254,6 +254,131 @@ test.describe('PDQ Worker Pool E2E', () => {
     }
   });
 
+  test('should detect near-duplicate images (1-pixel variation)', async ({ page }) => {
+    console.log('Testing near-duplicate detection...');
+
+    // Start normal test first
+    await page.click('#start-test');
+
+    // Wait for initial files to load
+    await page.waitForFunction(() => {
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      return total > 0;
+    }, { timeout: 5000 });
+
+    // Create and inject two nearly identical images AFTER test has started
+    await page.evaluate(async () => {
+      // Create a simple 100x100 red square
+      const createRedSquare = (withPixelVariation = false) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 100;
+        canvas.height = 100;
+        const ctx = canvas.getContext('2d')!;
+
+        // Fill with red
+        ctx.fillStyle = 'rgb(255, 0, 0)';
+        ctx.fillRect(0, 0, 100, 100);
+
+        // Add 1-pixel variation if requested (single blue pixel in center)
+        if (withPixelVariation) {
+          ctx.fillStyle = 'rgb(0, 0, 255)';
+          ctx.fillRect(50, 50, 1, 1);
+        }
+
+        return canvas;
+      };
+
+      // Convert canvas to blob
+      const canvasToBlob = (canvas: HTMLCanvasElement): Promise<Blob> => {
+        return new Promise((resolve) => {
+          canvas.toBlob((blob) => resolve(blob!), 'image/png');
+        });
+      };
+
+      // Create and inject both images
+      const [blob1, blob2] = await Promise.all([
+        canvasToBlob(createRedSquare(false)),
+        canvasToBlob(createRedSquare(true))
+      ]);
+
+      // Push directly to testFiles
+      (window as any).testFiles.push(
+        { name: 'base-image.png', blob: blob1 },
+        { name: 'near-duplicate.png', blob: blob2 }
+      );
+
+      // Update total files display
+      const total = parseInt(document.getElementById('total-files')!.textContent || '0');
+      document.getElementById('total-files')!.textContent = (total + 2).toString();
+    });
+
+    // Wait for processing to complete
+    await page.waitForFunction(() => {
+      const processing = parseInt(document.getElementById('processing-files')?.textContent || '0');
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      const processed = parseInt(document.getElementById('processed-files')?.textContent || '0');
+      const failed = parseInt(document.getElementById('failed-files')?.textContent || '0');
+      return processing === 0 && total > 0 && (processed + failed) === total;
+    }, { timeout: 30000 });
+
+    // Get hashes and calculate similarity
+    const similarity = await page.evaluate(() => {
+      const hashItems = document.querySelectorAll('.hash-item');
+      const hashes = new Map<string, string>();
+
+      hashItems.forEach(item => {
+        const filename = item.querySelector('.hash-filename')!.textContent!;
+        const hash = item.querySelector('.hash-value')!.textContent!;
+        hashes.set(filename, hash);
+      });
+
+      const baseHash = hashes.get('base-image.png');
+      const nearDupHash = hashes.get('near-duplicate.png');
+
+      if (!baseHash || !nearDupHash) {
+        return { found: false, distance: -1, similarity: -1 };
+      }
+
+      // Calculate Hamming distance
+      let distance = 0;
+      for (let i = 0; i < baseHash.length / 2; i++) {
+        const byte1 = parseInt(baseHash.substring(i * 2, i * 2 + 2), 16);
+        const byte2 = parseInt(nearDupHash.substring(i * 2, i * 2 + 2), 16);
+        const xor = byte1 ^ byte2;
+        // Count bits set in XOR
+        for (let j = 0; j < 8; j++) {
+          if (xor & (1 << j)) distance++;
+        }
+      }
+
+      const similarity = ((256 - distance) / 256) * 100;
+
+      return {
+        found: true,
+        distance,
+        similarity,
+        baseHash: baseHash.substring(0, 16) + '...',
+        nearDupHash: nearDupHash.substring(0, 16) + '...'
+      };
+    });
+
+    console.log(`Near-duplicate test results:`);
+    console.log(`  Base hash: ${similarity.baseHash}`);
+    console.log(`  Near-dup hash: ${similarity.nearDupHash}`);
+    console.log(`  Hamming distance: ${similarity.distance}`);
+    console.log(`  Similarity: ${similarity.similarity.toFixed(1)}%`);
+
+    // Verify both hashes were generated
+    expect(similarity.found).toBe(true);
+
+    // Images with only 1 pixel difference should be highly similar (>90%)
+    // PDQ is designed to be robust to small variations
+    expect(similarity.similarity).toBeGreaterThan(90);
+
+    // Distance should be very small (typically < 26 bits for PDQ)
+    expect(similarity.distance).toBeLessThan(26);
+  });
+
   test('should show performance improvements with parallel processing', async ({ page }) => {
     console.log('Testing parallel performance...');
 
@@ -302,6 +427,112 @@ test.describe('PDQ Worker Pool E2E', () => {
     console.log(`  Estimated speedup: ${speedup.toFixed(1)}x`);
 
     expect(speedup).toBeGreaterThan(MIN_EXPECTED_SPEEDUP);
+  });
+
+  test('should handle corrupt image files', async ({ page }) => {
+    console.log('Testing corrupt image handling...');
+
+    // Start normal test first
+    await page.click('#start-test');
+
+    // Wait for initial files to load
+    await page.waitForFunction(() => {
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      return total > 0;
+    }, { timeout: 5000 });
+
+    // Inject corrupt PNG file AFTER test has started
+    await page.evaluate(() => {
+      const corruptData = new Uint8Array([
+        0x89, 0x50, 0x4E, 0x47, // PNG signature (partial)
+        0xFF, 0xFF, 0xFF, 0xFF  // Invalid/corrupt data
+      ]);
+      const blob = new Blob([corruptData], { type: 'image/png' });
+      (window as any).testFiles.push({
+        name: 'corrupt.png',
+        blob
+      });
+      // Update total files display
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      document.getElementById('total-files')!.textContent = (total + 1).toString();
+    });
+
+    // Wait for processing to complete
+    await page.waitForFunction(() => {
+      const processing = parseInt(document.getElementById('processing-files')?.textContent || '0');
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      const processed = parseInt(document.getElementById('processed-files')?.textContent || '0');
+      const failed = parseInt(document.getElementById('failed-files')?.textContent || '0');
+      return processing === 0 && total > 0 && (processed + failed) === total;
+    }, { timeout: 30000 });
+
+    const results = await page.evaluate(() => (window as any).getResults());
+    const errorMessages = await page.evaluate(() => (window as any).getErrorMessages());
+
+    console.log(`Results: ${results.processed} processed, ${results.failed} failed`);
+    console.log(`Error messages:`, errorMessages);
+
+    // Should have failed the corrupt file (at least 1 failure)
+    expect(results.failed).toBeGreaterThan(0);
+
+    // Error message should be captured
+    expect(errorMessages.length).toBeGreaterThan(0);
+
+    // Workers should still be operational after error
+    const workerStatuses = await page.evaluate(() => {
+      return Array.from((window as any).workerStats.values()).map((stat: any) => stat.status);
+    });
+
+    // Most workers should be idle (not stuck in error state)
+    const idleCount = workerStatuses.filter((status: string) => status === 'idle').length;
+    expect(idleCount).toBeGreaterThan(WORKER_COUNT / 2);
+  });
+
+  test('should handle unsupported file formats', async ({ page }) => {
+    console.log('Testing unsupported format handling...');
+
+    // Start normal test first
+    await page.click('#start-test');
+
+    // Wait for initial files to load
+    await page.waitForFunction(() => {
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      return total > 0;
+    }, { timeout: 5000 });
+
+    // Inject text file (unsupported format) AFTER test has started
+    await page.evaluate(() => {
+      const textData = new TextEncoder().encode('This is not an image file');
+      const blob = new Blob([textData], { type: 'text/plain' });
+      (window as any).testFiles.push({
+        name: 'document.txt',
+        blob
+      });
+      // Update total files display
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      document.getElementById('total-files')!.textContent = (total + 1).toString();
+    });
+
+    // Wait for processing to complete
+    await page.waitForFunction(() => {
+      const processing = parseInt(document.getElementById('processing-files')?.textContent || '0');
+      const total = parseInt(document.getElementById('total-files')?.textContent || '0');
+      const processed = parseInt(document.getElementById('processed-files')?.textContent || '0');
+      const failed = parseInt(document.getElementById('failed-files')?.textContent || '0');
+      return processing === 0 && total > 0 && (processed + failed) === total;
+    }, { timeout: 30000 });
+
+    const results = await page.evaluate(() => (window as any).getResults());
+    const errorMessages = await page.evaluate(() => (window as any).getErrorMessages());
+
+    console.log(`Results: ${results.processed} processed, ${results.failed} failed`);
+    console.log(`Error messages:`, errorMessages);
+
+    // Should have failed the unsupported file (at least 1 failure)
+    expect(results.failed).toBeGreaterThan(0);
+
+    // Error should be logged
+    expect(errorMessages.length).toBeGreaterThan(0);
   });
 
   test('should handle worker errors gracefully', async ({ page }) => {
