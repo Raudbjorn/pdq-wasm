@@ -177,7 +177,7 @@ While ES module workers (`{ type: 'module' }`) are modern and elegant, they have
 `PDQ.initWorker()` uses `importScripts()` to load the Emscripten-generated UMD module:
 
 1. **Calls `importScripts()`** with the path to `wasm/pdq.js`
-2. **Accesses the factory** from the global scope: `self.createPDQModule`
+2. **Checks for UMD-style exports** (e.g., `self.module.exports` or similar) to access the factory; if not found, **falls back to the global scope**: `self.createPDQModule`
 3. **Initializes WASM** by calling the factory function with `locateFile` config
 4. **Ready to hash** - worker can now process images
 

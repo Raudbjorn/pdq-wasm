@@ -492,7 +492,7 @@
         document.getElementById('avg-time').textContent = `${avgTime}ms`;
       }
 
-      const totalTime = Date.now() - startTime;
+      const totalTime = startTime > 0 ? Date.now() - startTime : 0;
       document.getElementById('total-time').textContent = `${totalTime}ms`;
 
       // Update progress bar
@@ -578,6 +578,7 @@
       failedCount = 0;
       processingCount = 0;
       hashTimes = [];
+      startTime = 0;
       document.getElementById('hash-list').innerHTML = '';
       document.getElementById('total-files').textContent = '0';
       updateStats();

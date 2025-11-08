@@ -118,13 +118,7 @@ async function generateHash(imageBlob) {
     const hashArray = Array.from(hashBytes);
 
     // Convert to hex string
-    const hexChars = '0123456789abcdef';
-    let hexString = '';
-    for (let i = 0; i < 32; i++) {
-      const byte = hashArray[i];
-      hexString += hexChars[(byte >> 4) & 0xf];
-      hexString += hexChars[byte & 0xf];
-    }
+    const hexString = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
 
     return hexString;
 
