@@ -203,6 +203,7 @@ window.startTest = async function() {
 
   document.getElementById('start-test').disabled = true;
   testFiles = [];
+  window.testFiles = testFiles; // Re-expose after reset
   processedCount = 0;
   failedCount = 0;
   processingCount = 0;
@@ -239,6 +240,7 @@ window.startTest = async function() {
 
 window.resetTest = function() {
   testFiles = [];
+  window.testFiles = testFiles; // Re-expose after reset
   processedCount = 0;
   failedCount = 0;
   processingCount = 0;
@@ -255,6 +257,7 @@ window.resetTest = function() {
 // Expose for E2E tests
 window.workers = workers;
 window.workerStats = workerStats;
+window.testFiles = testFiles; // Expose testFiles for dynamic test injection
 window.getResults = () => ({
   totalFiles: testFiles.length + processedCount + failedCount,
   processed: processedCount,
