@@ -262,18 +262,15 @@ export class PDQ {
           throw new Error(errorMsg);
         }
 
-        // In Node.js, provide locateFile to resolve WASM file path correctly
+        // In Node.js, read WASM file and provide as binary to avoid URL issues
         const path = require('path');
+        const fs = require('fs');
         const wasmPath = path.join(__dirname, '..', 'wasm', 'pdq.wasm');
+        const wasmBinary = fs.readFileSync(wasmPath);
 
         this.module = await factory({
           ...options,
-          locateFile: (filename: string) => {
-            if (filename.endsWith('.wasm')) {
-              return wasmPath;
-            }
-            return filename;
-          }
+          wasmBinary: wasmBinary
         });
         this.log('PDQ WASM module initialized successfully (Node.js)');
       }
