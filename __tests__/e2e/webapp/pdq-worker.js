@@ -100,22 +100,28 @@ async function generateHash(imageBlob) {
   // Allocate memory in WASM
   const inputPtr = pdqModule._malloc(rgbData.length);
   const hashPtr = pdqModule._malloc(32); // PDQ hash is 32 bytes
+  const qualityPtr = pdqModule._malloc(4); // Quality is an int (4 bytes)
 
   try {
     // Copy RGB data to WASM memory
     pdqModule.HEAPU8.set(rgbData, inputPtr);
 
-    // Call the PDQ hash function
+    // Call the PDQ hash function with quality parameter
     pdqModule._pdq_hash_from_rgb(
       inputPtr,
       canvas.width,
       canvas.height,
-      hashPtr
+      hashPtr,
+      qualityPtr
     );
 
     // Read the hash from WASM memory
     const hashBytes = new Uint8Array(pdqModule.HEAPU8.buffer, hashPtr, 32);
     const hashArray = Array.from(hashBytes);
+
+    // Read quality value (optional - can be used for logging/debugging)
+    const quality = pdqModule.HEAP32[qualityPtr / 4];
+    console.log(`[PDQ Worker] Hash quality: ${quality}`);
 
     // Convert to hex string
     const hexString = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
@@ -126,6 +132,7 @@ async function generateHash(imageBlob) {
     // Free allocated memory
     pdqModule._free(inputPtr);
     pdqModule._free(hashPtr);
+    pdqModule._free(qualityPtr);
   }
 }
 

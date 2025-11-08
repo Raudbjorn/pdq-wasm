@@ -3,6 +3,7 @@ const FILES_PER_WORKER = 3; // Target files-per-worker ratio for workload genera
 const workers = [];
 const workerStats = new Map();
 let testFiles = [];
+let totalFilesCount = 0; // Track initial total for accurate progress calculation
 let processedCount = 0;
 let failedCount = 0;
 let processingCount = 0;
@@ -161,7 +162,7 @@ function updateStats() {
   document.getElementById('total-time').textContent = `${totalTime}ms`;
 
   // Update progress bar
-  const progress = testFiles.length > 0 ? (processedCount + failedCount) / testFiles.length * 100 : 0;
+  const progress = totalFilesCount > 0 ? (processedCount + failedCount) / totalFilesCount * 100 : 0;
   document.getElementById('progress-fill').style.width = `${progress}%`;
 }
 
@@ -229,11 +230,13 @@ window.startTest = async function() {
     }
   }
 
-  document.getElementById('total-files').textContent = testFiles.length;
-  console.log(`Loaded ${testFiles.length} files for processing`);
+  // Set initial total count for accurate progress calculation
+  totalFilesCount = testFiles.length;
+  document.getElementById('total-files').textContent = totalFilesCount;
+  console.log(`Loaded ${totalFilesCount} files for processing`);
 
   // Start processing - distribute to all workers
-  for (let i = 0; i < Math.min(WORKER_COUNT, testFiles.length); i++) {
+  for (let i = 0; i < Math.min(WORKER_COUNT, totalFilesCount); i++) {
     processNextFile(i);
   }
 };
@@ -241,6 +244,7 @@ window.startTest = async function() {
 window.resetTest = function() {
   testFiles = [];
   window.testFiles = testFiles; // Re-expose after reset
+  totalFilesCount = 0; // Reset total file count
   processedCount = 0;
   failedCount = 0;
   processingCount = 0;

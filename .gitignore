@@ -16,6 +16,8 @@ wasm/
 # Tests
 coverage/
 .nyc_output/
+playwright-report/
+test-results/
 
 # IDE
 .vscode/

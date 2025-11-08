@@ -259,7 +259,7 @@ To see the 12-worker pool in action:
 npm run dev
 ```
 
-Then navigate to: http://localhost:3000/__tests__/e2e/webapp/worker.html
+Then navigate to: http://localhost:3030/__tests__/e2e/webapp/worker.html
 
 The page provides:
 - Real-time worker status display (12 worker cards)
