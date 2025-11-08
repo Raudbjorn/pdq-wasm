@@ -6,10 +6,17 @@
  */
 
 const createPDQModule = require('../wasm/pdq.js');
+const path = require('path');
+const fs = require('fs');
 
 async function runTest() {
   console.log('Loading PDQ WASM module...');
-  const Module = await createPDQModule();
+
+  // In Node.js, read WASM file and provide as binary to avoid URL issues
+  const wasmPath = path.join(__dirname, '..', 'wasm', 'pdq.wasm');
+  const wasmBinary = fs.readFileSync(wasmPath);
+
+  const Module = await createPDQModule({ wasmBinary });
   console.log('✓ Module loaded successfully');
 
   // Access the memory buffer through exported heap arrays

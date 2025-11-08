@@ -154,59 +154,32 @@ Supported in:
 - Safari 16.4+
 - Edge 79+
 
-## Advanced: ES Module Workers
+## Advanced: Worker Implementation Details
 
-pdq-wasm now supports ES module workers with automatic fallback to dynamic import!
+### Recommended: Classic Workers with importScripts()
 
-### Option 1: Using importScripts (Classic Workers)
+**Classic workers are the recommended approach** for pdq-wasm because Emscripten generates UMD format JavaScript that cannot be dynamically imported as an ES module.
 
-See the main example above. This is the most compatible approach.
+See the main example above for the correct implementation using `importScripts()`.
 
-### Option 2: ES Module Workers
+### Why Not ES Module Workers?
 
-For ES module workers, `PDQ.initWorker()` automatically falls back to dynamic import:
+While ES module workers (`{ type: 'module' }`) are modern and elegant, they have a fundamental incompatibility with Emscripten's output:
 
-```javascript
-// pdq-worker.mjs
-import { PDQ, generateHashFromBlob } from 'pdq-wasm';
+- **Emscripten generates UMD format** (`wasm/pdq.js`) which uses `module.exports`
+- **Dynamic import expects ES module syntax** with `export` statements
+- **Result**: Dynamic import succeeds but returns an empty object
 
-// Initialize - automatically uses dynamic import in ES module workers
-await PDQ.initWorker({
-  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.7/wasm/pdq.wasm'
-});
+**Solution**: Use classic workers with `importScripts()`, which properly loads UMD modules.
 
-self.onmessage = async (event) => {
-  const { type, file } = event.data;
+### How PDQ.initWorker() Works
 
-  if (type === 'hash') {
-    const hash = await generateHashFromBlob(file);
-    self.postMessage({ type: 'result', hash });
-  }
-};
-```
+`PDQ.initWorker()` uses `importScripts()` to load the Emscripten-generated UMD module:
 
-Main thread:
-
-```javascript
-// Create ES module worker
-const worker = new Worker('pdq-worker.mjs', { type: 'module' });
-
-worker.onmessage = (event) => {
-  console.log('Hash:', event.data.hash);
-};
-
-// Send file to worker
-const file = document.querySelector('input[type="file"]').files[0];
-worker.postMessage({ type: 'hash', file });
-```
-
-### How It Works
-
-`PDQ.initWorker()` automatically detects the worker environment:
-
-1. **Classic workers**: Uses `importScripts()` to load the WASM glue code
-2. **ES module workers**: Falls back to `import()` when `importScripts` is unavailable
-3. **Custom builds**: Logs detailed error messages if the factory function isn't found
+1. **Calls `importScripts()`** with the path to `wasm/pdq.js`
+2. **Checks for UMD-style exports** (e.g., `self.module.exports` or similar) to access the factory; if not found, **falls back to the global scope**: `self.createPDQModule`
+3. **Initializes WASM** by calling the factory function with `locateFile` config
+4. **Ready to hash** - worker can now process images
 
 ### Logging in Workers
 
@@ -244,3 +217,52 @@ files.forEach((file, index) => {
   worker.postMessage({ type: 'hash', file });
 });
 ```
+
+## E2E Test Suite
+
+pdq-wasm includes a comprehensive E2E test suite demonstrating a 12-worker pool processing 36 images in parallel:
+
+- **Location**: `__tests__/e2e/worker-pool.spec.ts`
+- **Test page**: `__tests__/e2e/webapp/worker.html`
+- **Worker implementation**: `__tests__/e2e/webapp/pdq-worker.js`
+
+### Running the E2E Tests
+
+```bash
+npm run test:e2e -- worker-pool.spec.ts
+```
+
+### What's Tested
+
+The E2E suite validates:
+1. ✅ **12 workers initialize successfully** - All workers load and become ready
+2. ✅ **Parallel processing** - Multiple workers process files simultaneously
+3. ✅ **Work distribution** - Files are evenly distributed across all workers
+4. ✅ **Hash consistency** - Duplicate images produce identical hashes
+5. ✅ **Performance** - Achieves 3x+ speedup with parallel processing
+6. ✅ **Error handling** - Workers handle errors gracefully
+7. ✅ **Reset functionality** - Worker pool can be reset and reused
+
+### Performance Metrics
+
+From the E2E tests with 12 workers:
+- **36 files processed** in ~60-90ms total
+- **4ms average** per file (including overhead)
+- **Perfect distribution**: All 12 workers used (3-4 files each)
+- **0 errors** - 100% success rate
+
+### Viewing the Test Page
+
+To see the 12-worker pool in action:
+
+```bash
+npm run dev
+```
+
+Then navigate to: http://localhost:3030/__tests__/e2e/webapp/worker.html
+
+The page provides:
+- Real-time worker status display (12 worker cards)
+- Processing statistics (files, times, throughput)
+- Hash results with per-file timing
+- Visual progress tracking

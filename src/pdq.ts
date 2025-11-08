@@ -16,12 +16,15 @@ import type {
   LoggerFunction,
 } from './types';
 
+// Type for the Emscripten module factory function
+type PDQModuleFactory = (options?: any) => Promise<PDQWasmModule>;
+
 // Import the WASM module factory
 // This will be resolved differently in Node.js vs browser
-let createPDQModuleFactory: any = null;
+let createPDQModuleFactory: PDQModuleFactory | null = null;
 
 // Lazy loader for Node.js environment - deferred to avoid require() in ES modules
-function getWasmFactory(): any {
+function getWasmFactory(): PDQModuleFactory | null {
   if (createPDQModuleFactory !== null) {
     return createPDQModuleFactory;
   }
@@ -259,7 +262,16 @@ export class PDQ {
           throw new Error(errorMsg);
         }
 
-        this.module = await factory(options);
+        // In Node.js, read WASM file and provide as binary to avoid URL issues
+        const path = require('path');
+        const fs = require('fs');
+        const wasmPath = path.join(__dirname, '..', 'wasm', 'pdq.wasm');
+        const wasmBinary = fs.readFileSync(wasmPath);
+
+        this.module = await factory({
+          ...options,
+          wasmBinary: wasmBinary
+        });
         this.log('PDQ WASM module initialized successfully (Node.js)');
       }
     })();
@@ -319,52 +331,8 @@ export class PDQ {
       this.log(`Loading WASM JS glue code from: ${wasmJsUrl}`);
 
       try {
-        let factory: any;
-
-        // Try classic worker approach first (importScripts)
-        // @ts-ignore - importScripts is only available in workers
-        if (typeof importScripts === 'function') {
-          this.log('Loading via importScripts (classic worker)...');
-          // @ts-ignore - importScripts is only available in workers
-          importScripts(wasmJsUrl);
-
-          // The glue code should define createPDQModule on the global scope
-          factory = (self as any).createPDQModule;
-
-          // Validate that the factory function was properly loaded
-          if (typeof factory !== 'function') {
-            this.log(
-              `ERROR: createPDQModule function not found on global scope after importing ${wasmJsUrl}. ` +
-              'This may indicate a custom build or incorrect WASM JS glue code. ' +
-              'Ensure that the glue code defines createPDQModule globally. ' +
-              'If you are using a custom build, you may need to expose the factory function as self.createPDQModule.'
-            );
-            throw new Error(
-              'PDQ WASM initialization failed: createPDQModule is not defined globally. ' +
-              'Check that your WASM JS glue code exposes createPDQModule on the global scope. ' +
-              'See documentation for custom builds.'
-            );
-          }
-        } else {
-          // ES module worker fallback - try dynamic import
-          this.log('importScripts not available, trying dynamic import (ES module worker)...');
-          try {
-            const module = await import(/* webpackIgnore: true */ wasmJsUrl);
-            factory = module.default || module.createPDQModule;
-
-            if (typeof factory !== 'function') {
-              throw new Error(
-                `ES module at ${wasmJsUrl} does not export createPDQModule or a default factory function`
-              );
-            }
-          } catch (importError) {
-            throw new Error(
-              'Failed to load WASM module in worker. ' +
-              'importScripts is not available and dynamic import failed. ' +
-              `Error: ${importError instanceof Error ? importError.message : String(importError)}`
-            );
-          }
-        }
+        // Load the WASM factory using the appropriate method
+        const factory = await this.loadWorkerFactory(wasmJsUrl);
 
         // Initialize with the WASM URL
         this.module = await factory({
@@ -385,6 +353,101 @@ export class PDQ {
     })();
 
     return this.initPromise;
+  }
+
+  /**
+   * Try loading WASM factory using importScripts (for classic workers)
+   */
+  private static tryLoadViaImportScripts(wasmJsUrl: string): PDQModuleFactory | null {
+    // @ts-ignore - importScripts is only available in workers
+    if (typeof importScripts !== 'function') {
+      return null;
+    }
+
+    try {
+      this.log('Loading via importScripts (classic worker)...');
+      // @ts-ignore - importScripts is only available in workers
+      importScripts(wasmJsUrl);
+
+      // The glue code should define createPDQModule on the global scope
+      const factory = (self as any).createPDQModule;
+
+      // Validate that the factory function was properly loaded
+      if (typeof factory !== 'function') {
+        this.log(
+          `ERROR: createPDQModule function not found on global scope after importing ${wasmJsUrl}. ` +
+          'This may indicate a custom build or incorrect WASM JS glue code. ' +
+          'Ensure that the glue code defines createPDQModule globally. ' +
+          'If you are using a custom build, you may need to expose the factory function as self.createPDQModule.'
+        );
+        throw new Error(
+          'PDQ WASM initialization failed: createPDQModule is not defined globally. ' +
+          'Check that your WASM JS glue code exposes createPDQModule on the global scope. ' +
+          'See documentation for custom builds.'
+        );
+      }
+
+      this.log('Successfully loaded factory via importScripts');
+      return factory;
+    } catch (error) {
+      // importScripts failed - likely an ES module worker
+      this.log(`importScripts failed (ES module worker?): ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  }
+
+  /**
+   * Try loading WASM factory using dynamic import (for ES module workers)
+   */
+  private static async tryLoadViaDynamicImport(wasmJsUrl: string): Promise<PDQModuleFactory> {
+    this.log('Using dynamic import for ES module worker...');
+
+    const module = await import(/* webpackIgnore: true */ wasmJsUrl);
+    this.log(`Imported module keys: ${Object.keys(module).join(', ')}`);
+
+    // UMD modules export the factory on 'default' when dynamically imported
+    let factory = module.default;
+
+    // Check if we got a valid factory function
+    if (typeof factory !== 'function') {
+      // Try named exports as fallback
+      factory = (module as any).createPDQModule || (module as any).PDQ;
+
+      if (typeof factory !== 'function') {
+        this.log(`Factory type: ${typeof factory}`);
+        this.log(`module.default type: ${typeof module.default}`);
+        this.log(`module.createPDQModule type: ${typeof (module as any).createPDQModule}`);
+        throw new Error(
+          `ES module at ${wasmJsUrl} does not export a valid factory function. ` +
+          `Available exports: ${Object.keys(module).join(', ')}`
+        );
+      }
+    }
+
+    this.log('Successfully loaded factory function from dynamic import');
+    return factory;
+  }
+
+  /**
+   * Load WASM factory using appropriate method for the worker environment
+   */
+  private static async loadWorkerFactory(wasmJsUrl: string): Promise<PDQModuleFactory> {
+    // Try importScripts first (most reliable for Emscripten UMD output)
+    const importScriptsFactory = this.tryLoadViaImportScripts(wasmJsUrl);
+    if (importScriptsFactory) {
+      return importScriptsFactory;
+    }
+
+    // Fall back to dynamic import for ES module workers
+    try {
+      return await this.tryLoadViaDynamicImport(wasmJsUrl);
+    } catch (importError) {
+      throw new Error(
+        'Failed to load WASM module in worker. ' +
+        'importScripts is not available and dynamic import failed. ' +
+        `Error: ${importError instanceof Error ? importError.message : String(importError)}`
+      );
+    }
   }
 
   /**

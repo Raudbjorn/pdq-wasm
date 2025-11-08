@@ -12,7 +12,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:8080',
+    baseURL: 'http://localhost:3030',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -27,8 +27,8 @@ export default defineConfig({
 
   /* Run local web server before starting tests - required for ES module loading */
   webServer: {
-    command: 'npx serve -l 8080 .',
-    url: 'http://localhost:8080',
+    command: 'npx serve -l 3030 .',
+    url: 'http://localhost:3030',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },
