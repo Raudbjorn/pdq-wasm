@@ -310,6 +310,9 @@ test.describe('PDQ Worker Pool E2E', () => {
       // Update total files display
       const total = parseInt(document.getElementById('total-files')!.textContent || '0');
       document.getElementById('total-files')!.textContent = (total + 2).toString();
+
+      // Trigger processing for injected files
+      (window as any).triggerProcessing();
     });
 
     // Wait for processing to complete
@@ -455,6 +458,9 @@ test.describe('PDQ Worker Pool E2E', () => {
       // Update total files display
       const total = parseInt(document.getElementById('total-files')?.textContent || '0');
       document.getElementById('total-files')!.textContent = (total + 1).toString();
+
+      // Trigger processing for injected file
+      (window as any).triggerProcessing();
     });
 
     // Wait for processing to complete
@@ -511,6 +517,9 @@ test.describe('PDQ Worker Pool E2E', () => {
       // Update total files display
       const total = parseInt(document.getElementById('total-files')?.textContent || '0');
       document.getElementById('total-files')!.textContent = (total + 1).toString();
+
+      // Trigger processing for injected file
+      (window as any).triggerProcessing();
     });
 
     // Wait for processing to complete

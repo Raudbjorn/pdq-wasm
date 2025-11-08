@@ -287,6 +287,24 @@ window.injectTestFile = function(file) {
  */
 window.getErrorMessages = () => errorMessages;
 
+/**
+ * Manually trigger processing for any remaining files in the queue
+ * Useful after dynamically injecting files when workers might be idle
+ */
+window.triggerProcessing = function() {
+  if (testFiles.length === 0) {
+    return;
+  }
+
+  // Find idle workers and assign them files
+  for (let i = 0; i < WORKER_COUNT && testFiles.length > 0; i++) {
+    const stat = workerStats.get(i);
+    if (stat && stat.status === 'idle') {
+      processNextFile(i);
+    }
+  }
+};
+
 // Initialize workers on page load
 initWorkers();
 console.log('Worker pool initialized');
