@@ -12,6 +12,8 @@ import { test, expect } from '@playwright/test';
 
 const WEBAPP_URL = '/__tests__/e2e/webapp/worker.html';
 const WORKER_COUNT = 12;
+const EXPECTED_BASE_FILES = 4; // red-circle, blue-square, green-triangle, red-circle-copy
+const MIN_EXPECTED_SPEEDUP = 3; // At least 3x speedup with 12 workers
 
 test.describe('PDQ Worker Pool E2E', () => {
   test.beforeEach(async ({ page }) => {
@@ -239,8 +241,8 @@ test.describe('PDQ Worker Pool E2E', () => {
       expect(file.hashes[0]).toMatch(/^[0-9a-f]{64}$/);
     });
 
-    // Should have 4 different base files (red-circle, blue-square, green-triangle, red-circle-copy)
-    expect(hashes.length).toBe(4);
+    // Should have EXPECTED_BASE_FILES different base files
+    expect(hashes.length).toBe(EXPECTED_BASE_FILES);
 
     // red-circle and red-circle-copy should have the SAME hash (they're duplicates)
     const redCircle = hashes.find(f => f.name === 'red-circle.png');
@@ -299,7 +301,7 @@ test.describe('PDQ Worker Pool E2E', () => {
 
     console.log(`  Estimated speedup: ${speedup.toFixed(1)}x`);
 
-    expect(speedup).toBeGreaterThan(3); // At least 3x speedup with 12 workers
+    expect(speedup).toBeGreaterThan(MIN_EXPECTED_SPEEDUP);
   });
 
   test('should handle worker errors gracefully', async ({ page }) => {

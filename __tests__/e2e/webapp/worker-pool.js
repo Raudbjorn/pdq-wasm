@@ -1,4 +1,5 @@
 const WORKER_COUNT = 12;
+const FILES_PER_WORKER = 3; // Target files-per-worker ratio for workload generation
 const workers = [];
 const workerStats = new Map();
 let testFiles = [];
@@ -7,6 +8,7 @@ let failedCount = 0;
 let processingCount = 0;
 let startTime = 0;
 let hashTimes = [];
+let errorMessages = []; // Track error messages for testing
 
 // Initialize worker pool
 async function initWorkers() {
@@ -96,6 +98,11 @@ function handleWorkerMessage(workerId, data) {
       workerStats.get(workerId).errors++;
       workerStats.get(workerId).status = 'error';
       workerStats.get(workerId).currentFile = null;
+
+      // Track error message for testing
+      const errorMsg = `Worker ${workerId}: ${filename || 'unknown'}: ${error}`;
+      errorMessages.push(errorMsg);
+      console.error(errorMsg);
 
       updateWorkerUI(workerId, 'error', `Error: ${error}`);
       updateStats();
@@ -204,7 +211,7 @@ window.startTest = async function() {
   document.getElementById('hash-list').innerHTML = '';
 
   // Generate test set - replicate files to create workload
-  const replicaCount = Math.ceil(WORKER_COUNT * 3 / fileNames.length); // 3x workers
+  const replicaCount = Math.ceil(WORKER_COUNT * FILES_PER_WORKER / fileNames.length);
 
   for (let i = 0; i < replicaCount; i++) {
     for (const fileName of fileNames) {
@@ -236,6 +243,7 @@ window.resetTest = function() {
   failedCount = 0;
   processingCount = 0;
   hashTimes = [];
+  errorMessages = [];
   startTime = 0;
   document.getElementById('hash-list').innerHTML = '';
   document.getElementById('total-files').textContent = '0';
@@ -255,6 +263,26 @@ window.getResults = () => ({
   avgTime: hashTimes.length > 0 ? Math.round(hashTimes.reduce((a, b) => a + b, 0) / hashTimes.length) : 0,
   totalTime: startTime > 0 ? Date.now() - startTime : 0
 });
+
+/**
+ * Inject a test file into the processing queue (for error testing)
+ * @param {Object} file - File object with name, type, and data properties
+ */
+window.injectTestFile = function(file) {
+  const blob = new Blob([file.data], { type: file.type });
+  testFiles.push({
+    name: file.name,
+    blob
+  });
+  // Update total files display
+  document.getElementById('total-files').textContent = testFiles.length + processedCount + failedCount;
+};
+
+/**
+ * Get all error messages collected during processing
+ * @returns {string[]} Array of error messages
+ */
+window.getErrorMessages = () => errorMessages;
 
 // Initialize workers on page load
 initWorkers();
