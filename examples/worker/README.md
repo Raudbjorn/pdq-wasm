@@ -16,13 +16,13 @@ Create a worker file (`pdq-worker.js`):
 
 ```javascript
 // Import PDQ (using importScripts for classic workers)
-importScripts('https://unpkg.com/pdq-wasm@0.3.7/dist/browser.js');
+importScripts('https://unpkg.com/pdq-wasm@0.3.9/dist/browser.js');
 
 // Initialize PDQ in the worker, with error handling
 async function init() {
   try {
     await PDQ.initWorker({
-      wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.7/wasm/pdq.wasm'
+      wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.9/wasm/pdq.wasm'
     });
     self.postMessage({ type: 'ready' });
   } catch (error) {
@@ -187,7 +187,7 @@ You can enable logging to debug worker initialization:
 
 ```javascript
 await PDQ.initWorker({
-  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.7/wasm/pdq.wasm',
+  wasmUrl: 'https://unpkg.com/pdq-wasm@0.3.9/wasm/pdq.wasm',
   logger: (msg) => console.log('[PDQ Worker]', msg)
 });
 // Logs:
