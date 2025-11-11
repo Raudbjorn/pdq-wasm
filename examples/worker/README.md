@@ -7,6 +7,7 @@ This example demonstrates how to use pdq-wasm in a Web Worker for non-blocking i
 - **Non-blocking**: Image hashing runs in a separate thread, keeping the UI responsive
 - **Worker-compatible APIs**: Uses `PDQ.initWorker()` and `generateHashFromBlob()`
 - **Modern browser APIs**: Leverages `createImageBitmap` and `OffscreenCanvas`
+- **Service Worker support**: Offline functionality and caching for improved performance
 
 ## Usage
 
@@ -106,6 +107,8 @@ python3 -m http.server 8000
 ```
 
 Then open http://localhost:8000
+
+**Note**: Service workers require HTTPS or localhost to function. After the first load, this example works offline thanks to service worker caching. See [../SERVICE_WORKER.md](../SERVICE_WORKER.md) for details.
 
 ### Option 2: Live Server (VS Code)
 
