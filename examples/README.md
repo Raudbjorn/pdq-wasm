@@ -13,6 +13,7 @@ Interactive web application demonstrating PDQ hashing in the browser.
 - Compare two images and see their similarity score
 - Visual interface with real-time results
 - Uses Canvas API for image processing
+- **Service Worker support** for offline functionality and caching
 
 **Running the example:**
 
@@ -29,7 +30,9 @@ python -m http.server 8000
 # Then open http://localhost:8000 in your browser
 ```
 
-**Note:** You need to serve the files with a local server (not `file://`) due to WASM module loading restrictions.
+**Note:** You need to serve the files with a local server (not `file://`) due to WASM module loading restrictions and service worker requirements.
+
+**Offline Support:** After the first load, the browser example works offline thanks to service worker caching. See [SERVICE_WORKER.md](SERVICE_WORKER.md) for details.
 
 ### 2. Node.js Examples (`nodejs/`)
 

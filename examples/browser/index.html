@@ -136,6 +136,22 @@
     <p><strong>Similarity:</strong> Percentage similarity based on the Hamming distance (100% - (distance/256 * 100)).</p>
   </div>
 
+  <!-- Service Worker Registration -->
+  <script>
+    // Register service worker for offline support and caching
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then((registration) => {
+            console.log('✓ Service Worker registered successfully:', registration.scope);
+          })
+          .catch((error) => {
+            console.warn('Service Worker registration failed:', error);
+          });
+      });
+    }
+  </script>
+
   <!-- PDQ WASM - Zero Configuration Required! -->
   <script type="module">
     // This example demonstrates the CDN-first approach
