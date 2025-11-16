@@ -66,46 +66,38 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Cache hit - return response from cache
-        if (response) {
-          console.log('[Service Worker] Serving from cache:', event.request.url);
-          return response;
-        }
+    (async () => {
+      const cachedResponse = await caches.match(event.request);
+      if (cachedResponse) {
+        console.log('[Service Worker] Serving from cache:', event.request.url);
+        return cachedResponse;
+      }
 
-        // Clone the request because it can only be used once
-        const fetchRequest = event.request.clone();
-
-        return fetch(fetchRequest).then((response) => {
-          // Check if valid response
-          if (!response || !response.ok) {
-            return response;
+      try {
+        const networkResponse = await fetch(event.request);
+        // Check if we received a valid response before caching
+        if (networkResponse && networkResponse.ok) {
+          const responseToCache = networkResponse.clone();
+          const cache = await caches.open(CACHE_NAME);
+          // Wait for the cache operation to complete to ensure data integrity.
+          // We wrap this in a try/catch to prevent a cache failure from breaking the network response.
+          try {
+            await cache.put(event.request, responseToCache);
+            console.log('[Service Worker] Caching new resource:', event.request.url);
+          } catch (error) {
+            console.error('[Service Worker] Failed to cache resource:', event.request.url, error);
+            if (error.name === 'QuotaExceededError') {
+              console.error('[Service Worker] Cache quota exceeded');
+            }
           }
-
-          // Clone the response because it can only be used once
-          const responseToCache = response.clone();
-
-          // Cache the new resource with error handling
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              console.log('[Service Worker] Caching new resource:', event.request.url);
-              return cache.put(event.request, responseToCache);
-            })
-            .catch((error) => {
-              console.error('[Service Worker] Failed to cache resource:', event.request.url, error);
-              if (error && error.name === 'QuotaExceededError') {
-                console.error('[Service Worker] Cache quota exceeded');
-              }
-            });
-
-          return response;
-        }).catch((error) => {
-          console.error('[Service Worker] Fetch failed:', error);
-          // You could return a custom offline page here
-          throw error;
-        });
-      })
+        }
+        return networkResponse;
+      } catch (error) {
+        console.error('[Service Worker] Fetch failed:', error);
+        // You could return a custom offline page here
+        throw error;
+      }
+    })()
   );
 });
 
