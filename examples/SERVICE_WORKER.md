@@ -18,7 +18,7 @@ The browser example (`examples/browser/`) includes a service worker that:
 1. Caches the HTML page, JavaScript modules, and WASM binary on first load
 2. Serves cached resources for faster subsequent loads
 3. Enables the app to work offline after the first visit
-4. Automatically updates the cache when files change
+4. Automatically updates the cache when a new version of the service worker is deployed
 
 ### Worker Example
 

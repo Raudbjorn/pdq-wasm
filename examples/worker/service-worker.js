@@ -38,12 +38,12 @@ self.addEventListener('activate', (event) => {
     caches.keys()
       .then((cacheNames) => {
         return Promise.all(
-          cacheNames.map((cacheName) => {
-            if (cacheName !== CACHE_NAME) {
+          cacheNames
+            .filter(cacheName => cacheName !== CACHE_NAME)
+            .map((cacheName) => {
               console.log('[Service Worker] Deleting old cache:', cacheName);
               return caches.delete(cacheName);
-            }
-          })
+            })
         );
       })
       .then(() => {
@@ -99,11 +99,4 @@ self.addEventListener('fetch', (event) => {
       }
     })()
   );
-});
-
-// Listen for messages from the client
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
 });
