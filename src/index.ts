@@ -22,6 +22,7 @@ export {
   generateHashFromDataUrl,
   generateHashFromBlob,
   detectDuplicatesByHash,
+  getEnvironment,
 } from './browser';
 
 export type {
@@ -31,7 +32,10 @@ export type {
   FileWithHash,
   DetectionProgress,
   ProgressCallback,
+  RuntimeEnvironment,
 } from './browser';
+
+export { WorkerPool, type WorkerPoolOptions } from './worker-pool';
 
 // Re-export as default
 export { PDQ as default } from './pdq';
