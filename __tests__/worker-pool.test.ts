@@ -75,6 +75,6 @@ describe('WorkerPool', () => {
     // With 2 workers and ~50ms per task, 4 tasks should take ~100ms (2 batches)
     // This is a rough check to ensure parallelism is happening
     // Ideally it should be < 200ms (sequential would be ~200ms)
-    expect(duration).toBeLessThan(180); 
+    expect(maxActiveWorkers).toBe(2);
   });
 });
