@@ -25,7 +25,7 @@ interface WorkerTask {
 interface WorkerState {
   id: number;
   worker: Worker;
-  busy: boolean;
+  currentTask: WorkerTask | null;
 }
 
 /**
